@@ -12,7 +12,11 @@ class Lesson(db.Model):
     description = db.Column(db.Text)
 
 class Problem(db.Model):
+    __tablename__ = 'problem'
+    __table_args__ = {'extend_existing': True}  # テーブル再定義を許可
     id = db.Column(db.Integer, primary_key=True)
-    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    title = db.Column(db.String(80), nullable=False)
+    description = db.Column(db.Text, nullable=False)
     input_data = db.Column(db.Text, nullable=False)
     expected_output = db.Column(db.Text, nullable=False)
+

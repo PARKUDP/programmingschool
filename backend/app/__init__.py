@@ -14,9 +14,11 @@ def create_app():
     from app.routes.admin_routes import admin_bp
     from app.routes.user_routes import user_bp
     from app.routes.problem_routes import problem_bp
+    from app.routes.execute_routes import execute_bp
 
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     app.register_blueprint(user_bp, url_prefix='/api/user')
     app.register_blueprint(problem_bp, url_prefix='/api/problem')
+    app.register_blueprint(execute_bp, url_prefix='/api')
 
     return app
