@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
 import Editor from '@monaco-editor/react';
 
+const API_URL = process.env.REACT_APP_API_URL;
+
+if (!API_URL) {
+  throw new Error("REACT_APP_API_URL is not defined. Please check your .env file.");
+}
+
 const CodeEditor: React.FC = () => {
   const [code, setCode] = useState('');
 
   const handleRunCode = async () => {
-    const response = await fetch('/api/execute', {
+    const response = await fetch(`${API_URL}/api/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
