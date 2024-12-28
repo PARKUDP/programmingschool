@@ -8,7 +8,7 @@ def create_app():
     app = Flask(__name__)
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mvp.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    CORS(app)
+    CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
     db.init_app(app)
 
     from app.routes.admin_routes import admin_bp

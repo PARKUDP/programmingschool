@@ -13,7 +13,7 @@ class Lesson(db.Model):
 
 class Problem(db.Model):
     __tablename__ = 'problem'
-    __table_args__ = {'extend_existing': True}  # テーブル再定義を許可
+    __table_args__ = {'extend_existing': True}  
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(80), nullable=False)
     description = db.Column(db.Text, nullable=False)
