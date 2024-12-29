@@ -13,10 +13,8 @@ class Lesson(db.Model):
 
 class Problem(db.Model):
     __tablename__ = 'problem'
-    __table_args__ = {'extend_existing': True}  
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(80), nullable=False)
     description = db.Column(db.Text, nullable=False)
     input_data = db.Column(db.Text, nullable=False)
     expected_output = db.Column(db.Text, nullable=False)
-
