@@ -1,22 +1,30 @@
-from flask import Blueprint, request, jsonify
 import os
+from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 
 upload_bp = Blueprint('upload', __name__)
 UPLOAD_FOLDER = './uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-@upload_bp.route('/upload/image', methods=['POST'])
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@upload_bp.route('/image', methods=['POST'])
 def upload_image():
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image file provided'}), 400
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
 
-    file = request.files['image']
+    file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    filename = secure_filename(file.filename)
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(file_path)
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        return jsonify({'success': True, 'url': f'/uploads/{filename}'})
 
-    return jsonify({'url': f'/uploads/{filename}'})
+    return jsonify({'error': 'File not allowed'}), 400

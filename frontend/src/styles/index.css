@@ -31,21 +31,6 @@ a:hover {
     color: #0056b3;
 }
 
-button {
-    cursor: pointer;
-    font-family: inherit;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    background-color: #4CAF50;
-    color: #fff;
-    transition: background-color 0.3s;
-}
-
-button:hover {
-    background-color: #45a049;
-}
-
 .card {
     background-color: #fff;
     border-radius: 8px;

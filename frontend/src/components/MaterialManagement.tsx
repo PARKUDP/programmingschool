@@ -1,84 +1,39 @@
-import React, { useRef, useEffect, useState } from 'react';
-import EditorJS from '@editorjs/editorjs';
-import Header from '@editorjs/header';
-import List from '@editorjs/list';
-import Paragraph from '@editorjs/paragraph';
-import ImageTool from '@editorjs/image';
-import axios from 'axios';
+import React, { useState } from 'react';
+import { Editor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 const MaterialManagement: React.FC = () => {
-  const editorRef = useRef<EditorJS | null>(null);
-  const [title, setTitle] = useState<string>('');
-  const [saving, setSaving] = useState<boolean>(false);
-
-  useEffect(() => {
-    const initializeEditor = () => {
-      if (!editorRef.current) {
-        editorRef.current = new EditorJS({
-          holder: 'editorjs', 
-          tools: {
-            header: Header,
-            list: List,
-            paragraph: Paragraph,
-            image: {
-              class: ImageTool,
-              config: {
-                endpoints: {
-                  byFile: '/api/admin/upload-image', 
-                },
-              },
-            },
-          },
-        });
-      }
-    };
-
-    initializeEditor();
-
-    return () => {
-      if (editorRef.current) {
-        editorRef.current.destroy?.(); 
-        editorRef.current = null;
-      }
-    };
-  }, []);
+  const [title, setTitle] = useState('');
+  const [editor] = useState(() => new Editor({ extensions: [StarterKit] }));
 
   const handleSave = async () => {
-    if (!editorRef.current) return;
-
-    setSaving(true);
-    const savedData = await editorRef.current.save();
-    try {
-      await axios.post('/api/admin/material', {
-        title,
-        content: savedData, 
-      });
-      alert('教材が保存されました');
-    } catch (error) {
-      console.error('教材保存エラー:', error);
-      alert('教材の保存に失敗しました');
-    } finally {
-      setSaving(false);
-    }
+    const content = editor.getJSON();
+    await fetch(`${API_URL}/api/admin/material`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description: JSON.stringify(content) }),
+    });
+    alert('教材が保存されました');
   };
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">教材管理</h1>
+    <div>
+      <h1>教材管理</h1>
       <input
         type="text"
-        placeholder="教材のタイトルを入力してください"
+        placeholder="教材名"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full p-2 mb-4 border border-gray-300 rounded"
+        className="border p-2 rounded mb-4 w-full"
       />
-      <div id="editorjs" className="border border-gray-300 rounded p-2"></div>
+      <EditorContent editor={editor} className="border p-4 rounded mb-4" />
       <button
         onClick={handleSave}
-        className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
-        disabled={saving}
+        className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
       >
-        {saving ? '保存中...' : '保存'}
+        保存
       </button>
     </div>
   );

@@ -1,18 +1,40 @@
 from flask import Blueprint, request, jsonify
-from app.models import db, User, Material, Lesson
+from app.models import db, User, Material, Lesson, Progress
 import os
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash
 
 admin_bp = Blueprint('admin', __name__)
+@admin_bp.route('/user', methods=['GET'])
+def get_users():
+    try:
+        users = User.query.all()
+        user_list = [{"id": user.id, "name": user.name, "email": user.email, "role": user.role} for user in users]
+        return jsonify(user_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+@admin_bp.route('/material', methods=['GET'])
+def get_materials():
+    try:
+        materials = Material.query.all()
+        material_list = [{"id": material.id, "title": material.title, "description": material.description} for material in materials]
+        return jsonify(material_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 @admin_bp.route('/user', methods=['POST'])
 def create_user():
     data = request.json
-    user = User(name=data['name'], email=data['email'], password=data['password'], role=data['role'])
-    db.session.add(user)
-    db.session.commit()
-    return jsonify({"message": "User created successfully", "user_id": user.id})
-
+    try:
+        hashed_password = generate_password_hash(data['password'], method='sha256')
+        user = User(name=data['name'], email=data['email'], password=hashed_password, role=data['role'])
+        db.session.add(user)
+        db.session.commit()
+        return jsonify({"message": "User created successfully", "user_id": user.id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    
 @admin_bp.route('/material', methods=['POST'])
 def create_material():
     data = request.json
@@ -29,26 +51,16 @@ def create_lesson():
     db.session.commit()
     return jsonify({"message": "Lesson created successfully", "lesson_id": lesson.id})
 
+@admin_bp.route('/user/assign_material', methods=['POST'])
+def assign_material():
+    data = request.json
+    user = User.query.get(data['user_id'])
+    material = Material.query.get(data['material_id'])
+    if not user or not material:
+        return jsonify({"message": "User or Material not found"}), 404
 
-UPLOAD_FOLDER = './uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-
-admin_bp = Blueprint('admin', __name__)
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@admin_bp.route('/upload-image', methods=['POST'])
-def upload_image():
-    if 'file' not in request.files:
-        return jsonify({"success": 0, "message": "No file provided"}), 400
-
-    file = request.files['file']
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(file_path)
-        return jsonify({"success": 1, "file": {"url": f"/uploads/{filename}"}})
-    else:
-        return jsonify({"success": 0, "message": "Invalid file type"}), 400
+    for lesson in material.lessons:
+        progress = Progress(user_id=user.id, lesson_id=lesson.id, status='not_started')
+        db.session.add(progress)
+    db.session.commit()
+    return jsonify({"message": "Material assigned successfully"})

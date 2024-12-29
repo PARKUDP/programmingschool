@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import Editor from '@monaco-editor/react';
 
-const API_URL = process.env.REACT_APP_API_URL;
-
-if (!API_URL) {
-  throw new Error("REACT_APP_API_URL is not defined. Please check your .env file.");
-}
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const CodeEditor: React.FC = () => {
   const [code, setCode] = useState('');
+  const [output, setOutput] = useState('');
 
   const handleRunCode = async () => {
     const response = await fetch(`${API_URL}/api/execute`, {
@@ -17,7 +14,7 @@ const CodeEditor: React.FC = () => {
       body: JSON.stringify({ code }),
     });
     const data = await response.json();
-    console.log(data);
+    setOutput(data.stdout || data.stderr || 'No output');
   };
 
   return (
@@ -29,6 +26,10 @@ const CodeEditor: React.FC = () => {
         onChange={(value) => setCode(value || '')}
       />
       <button onClick={handleRunCode}>実行</button>
+      <div className="mt-4 p-4 border rounded">
+        <h3>実行結果:</h3>
+        <pre>{output}</pre>
+      </div>
     </div>
   );
 };
