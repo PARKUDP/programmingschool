@@ -11,27 +11,25 @@ export const DashboardGrid: React.FC = () => {
         icon={<BookOpen className="h-6 w-6 text-[#4CAF50]" />}
         action={{
           text: "Continue Learning",
-          onClick: () => console.log("Navigate to lesson")
+          onClick: () => console.log("Navigate to lesson"),
         }}
       />
-      
       <DashboardCard
         title="Practice Problems"
         description="5 new problems available"
         icon={<Code className="h-6 w-6 text-[#4CAF50]" />}
         action={{
           text: "Start Coding",
-          onClick: () => console.log("Navigate to problems")
+          onClick: () => console.log("Navigate to problems"),
         }}
       />
-      
       <DashboardCard
         title="Your Progress"
         description="70% of Python Basics completed"
         icon={<Activity className="h-6 w-6 text-[#4CAF50]" />}
         action={{
           text: "View Details",
-          onClick: () => console.log("Navigate to progress")
+          onClick: () => console.log("Navigate to progress"),
         }}
       />
     </div>

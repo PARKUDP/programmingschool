@@ -9,7 +9,7 @@ interface Achievement {
 const achievements: Achievement[] = [
   { id: '1', text: "Completed 'Python Basics' module" },
   { id: '2', text: "Solved 10 practice problems" },
-  { id: '3', text: "7-day learning streak" }
+  { id: '3', text: "7-day learning streak" },
 ];
 
 export const AchievementList: React.FC = () => {
