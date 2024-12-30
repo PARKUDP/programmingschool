@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
-
 const AdminPanel: React.FC = () => {
   const [users, setUsers] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -14,8 +12,8 @@ const AdminPanel: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const userRes = await fetch(`${API_URL}/api/admin/user`);
-      const materialRes = await fetch(`${API_URL}/api/admin/material`);
+      const userRes = await fetch('/api/admin/user');
+      const materialRes = await fetch('/api/admin/material');
       setUsers(await userRes.json());
       setMaterials(await materialRes.json());
     };
@@ -23,7 +21,7 @@ const AdminPanel: React.FC = () => {
   }, []);
 
   const assignMaterial = async () => {
-    await fetch(`${API_URL}/api/admin/user/assign_material`, {
+    await fetch('/api/admin/user/assign_material', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: selectedUser, material_id: selectedMaterial }),
@@ -31,7 +29,7 @@ const AdminPanel: React.FC = () => {
   };
 
   const createUser = async () => {
-    await fetch(`${API_URL}/api/admin/user`, {
+    await fetch('/api/admin/user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

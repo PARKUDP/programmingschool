@@ -1,21 +1,30 @@
 import React, { useState } from 'react';
 import Editor from '@monaco-editor/react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-
 const CodeEditor: React.FC = () => {
   const [code, setCode] = useState('');
   const [output, setOutput] = useState('');
 
+
   const handleRunCode = async () => {
-    const response = await fetch(`${API_URL}/api/execute`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await response.json();
-    setOutput(data.stdout || data.stderr || 'No output');
-  };
+    try {
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+  
+      const data = await response.json();
+      setOutput(data.stdout || data.stderr || 'No output');
+    } catch (error) {
+      console.error('Error running code:', error);
+      setOutput('An error occurred while executing the code.');
+    }
+  };  
 
   return (
     <div>

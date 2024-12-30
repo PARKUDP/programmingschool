@@ -1,20 +1,29 @@
-import React, { useState } from 'react';
-import { Editor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+import React, { useState, useEffect } from 'react';
 
 const MaterialManagement: React.FC = () => {
+  const [materials, setMaterials] = useState([]);
   const [title, setTitle] = useState('');
-  const [editor] = useState(() => new Editor({ extensions: [StarterKit] }));
+  const [description, setDescription] = useState('');
 
-  const handleSave = async () => {
-    const content = editor.getJSON();
-    await fetch(`${API_URL}/api/admin/material`, {
+  const fetchMaterials = async () => {
+    const response = await fetch('/api/admin/material');
+    const data = await response.json();
+    setMaterials(data);
+  };
+
+  useEffect(() => {
+    fetchMaterials();
+  }, []);
+
+  const handleSaveMaterial = async () => {
+    await fetch('/api/admin/material', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, description: JSON.stringify(content) }),
+      body: JSON.stringify({ title, description }), // descriptionを追加
     });
+    setTitle('');
+    setDescription('');
+    fetchMaterials();
     alert('教材が保存されました');
   };
 
@@ -28,13 +37,35 @@ const MaterialManagement: React.FC = () => {
         onChange={(e) => setTitle(e.target.value)}
         className="border p-2 rounded mb-4 w-full"
       />
-      <EditorContent editor={editor} className="border p-4 rounded mb-4" />
+      <textarea
+        placeholder="教材の詳細 (任意)"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        className="border p-2 rounded mb-4 w-full"
+        rows={4}
+      />
       <button
-        onClick={handleSave}
+        onClick={handleSaveMaterial}
         className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
       >
-        保存
+        教材を保存
       </button>
+      <div className="mt-4">
+        <h2>既存の教材</h2>
+        <ul>
+          {materials.map((material: any) => (
+            <li key={material.id} className="mb-2">
+              <span>{material.title}</span>
+              <a
+                href={`/lessons/${material.id}`}
+                className="ml-4 text-blue-500 underline"
+              >
+                レッスンを管理
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 };

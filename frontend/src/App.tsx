@@ -8,7 +8,9 @@ import Login from './components/Login.tsx';
 import { DashboardGrid } from './components/Dashboard/DashboardGrid.tsx';
 import { AchievementList } from './components/Dashboard/AchievementList.tsx';
 import MaterialManagement from './components/MaterialManagement.tsx';
-import './styles/index.css'
+import LessonManagement from './components/LessonManagement.tsx'; 
+import './styles/index.css';
+
 const App: React.FC = () => {
   return (
     <Router>
@@ -19,6 +21,7 @@ const App: React.FC = () => {
             <Route path="/materials" element={<MaterialManagement />} />
             <Route path="/" element={<DashboardGrid />} />
             <Route path="/lessons" element={<Lessons />} />
+            <Route path="/lessons/:materialId" element={<LessonManagement />} />
             <Route path="/practice" element={<CodeEditor />} />
             <Route path="/admin" element={<AdminPanel />} />
             <Route path="/login" element={<Login />} />
