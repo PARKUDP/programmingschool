@@ -3,8 +3,11 @@ import subprocess
 
 execute_bp = Blueprint('execute', __name__)
 
-@execute_bp.route('/execute', methods=['POST'])
+@execute_bp.route('', methods=['POST', 'OPTIONS'])
 def execute_code():
+    if request.method == 'OPTIONS':
+        return '', 200
+
     data = request.json
     code = data.get('code', '')
 
@@ -22,3 +25,5 @@ def execute_code():
         })
     except subprocess.TimeoutExpired:
         return jsonify({'error': 'Execution timed out'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400

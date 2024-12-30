@@ -1,5 +1,5 @@
-import os
 from flask import Blueprint, request, jsonify
+import os
 from werkzeug.utils import secure_filename
 
 upload_bp = Blueprint('upload', __name__)

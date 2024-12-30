@@ -5,6 +5,61 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
 
 admin_bp = Blueprint('admin', __name__)
+
+@admin_bp.route('/lessons/<int:material_id>', methods=['GET'])
+def get_lessons(material_id):
+    try:
+        lessons = Lesson.query.filter_by(material_id=material_id).all()
+        lesson_list = [{"id": lesson.id, "title": lesson.title, "description": lesson.description} for lesson in lessons]
+        return jsonify(lesson_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route('/lesson/<int:lesson_id>', methods=['GET'])
+def get_lesson(lesson_id):
+    try:
+        lesson = Lesson.query.get(lesson_id)
+        if not lesson:
+            return jsonify({"error": "Lesson not found"}), 404
+
+        return jsonify({
+            "id": lesson.id,
+            "title": lesson.title,
+            "description": lesson.description
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/lesson/<int:lesson_id>', methods=['PUT'])
+def update_lesson(lesson_id):
+    try:
+        data = request.json
+        lesson = Lesson.query.get(lesson_id)
+        if not lesson:
+            return jsonify({"error": "Lesson not found"}), 404
+
+        lesson.title = data.get('title', lesson.title)
+        lesson.description = data.get('description', lesson.description)
+        db.session.commit()
+
+        return jsonify({"message": "Lesson updated successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/lesson/<int:lesson_id>', methods=['DELETE'])
+def delete_lesson(lesson_id):
+    try:
+        lesson = Lesson.query.get(lesson_id)
+        if not lesson:
+            return jsonify({"error": "Lesson not found"}), 404
+
+        db.session.delete(lesson)
+        db.session.commit()
+        return jsonify({"message": "Lesson deleted successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 @admin_bp.route('/user', methods=['GET'])
 def get_users():
     try:
