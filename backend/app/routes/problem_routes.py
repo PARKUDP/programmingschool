@@ -2,12 +2,13 @@ from flask import Blueprint, request, jsonify
 from app.models import db, Problem, Submission
 import subprocess
 
-problem_bp = Blueprint('problem', __name__)
+problem_bp = Blueprint("problem", __name__)
 
-@problem_bp.route('/<int:problem_id>/submit', methods=['POST'])
+
+@problem_bp.route("/<int:problem_id>/submit", methods=["POST"])
 def submit_solution(problem_id):
     data = request.json
-    code = data['code']
+    code = data["code"]
     problem = Problem.query.get(problem_id)
 
     if not problem:
@@ -15,19 +16,19 @@ def submit_solution(problem_id):
 
     try:
         result = subprocess.run(
-            ['python3', '-c', code],
+            ["python3", "-c", code],
             input=problem.input,
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
         )
         is_correct = result.stdout.strip() == problem.expected_output.strip()
         submission = Submission(
             problem_id=problem_id,
-            user_id=data['user_id'],
+            user_id=data["user_id"],
             code=code,
-            result='correct' if is_correct else 'incorrect',
-            output=result.stdout
+            result="correct" if is_correct else "incorrect",
+            output=result.stdout,
         )
         db.session.add(submission)
         db.session.commit()

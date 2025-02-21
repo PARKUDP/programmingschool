@@ -10,8 +10,7 @@ export const Navigation: React.FC = () => {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Code className="h-8 w-8 text-[#4CAF50]" />
-              <span className="ml-2 text-xl font-bold text-gray-900"
-              >
+              <span className="ml-2 text-xl font-bold text-gray-900">
                 PyLearn
               </span>
             </div>
