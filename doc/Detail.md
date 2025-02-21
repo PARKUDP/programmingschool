@@ -48,43 +48,6 @@
    - レッスンのプレビュー
    - 保存して公開
 
-## **ER図**
-```mermaid
----
-title: "ER図"
----
-erDiagram
-    COURSES ||--o{ MATERIALS : has
-    MATERIALS ||--o{ LESSONS : has
-    LESSONS ||--o{ PROBLEMS : has
-
-    COURSES {
-      INT id PK
-      VARCHAR title
-      TIMESTAMP created_at
-    }
-    MATERIALS {
-      INT id PK
-      VARCHAR title
-      INT course_id  "FK to COURSES.id"
-      TIMESTAMP created_at
-    }
-    LESSONS {
-      INT id PK
-      VARCHAR title
-      INT material_id  "FK to MATERIALS.id"
-      TIMESTAMP created_at
-    }
-    PROBLEMS {
-      INT id PK
-      INT lesson_id  "FK to LESSONS.id"
-      TEXT problem_text
-      ENUM text code multiple_choice problem_type
-      TEXT correct_answer
-      TIMESTAMP created_at
-    }
-```
-
 ## データベーステーブル定義
 
 ### **1. `courses` (コース)**
