@@ -26,14 +26,17 @@ jobs:
           cd backend
           python -m venv venv
           source venv/bin/activate
+          pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Black でフォーマットチェック
         run: |
           cd backend
+          source venv/bin/activate
           black --check .
 
       - name: Pytest でテスト実行
         run: |
           cd backend
+          source venv/bin/activate
           pytest
