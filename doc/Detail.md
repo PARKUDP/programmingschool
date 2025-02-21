@@ -49,6 +49,7 @@
    - 保存して公開
 
 ## **ER図**
+```mermaid
 ---
 title: "ER図"
 ---
@@ -82,6 +83,7 @@ erDiagram
       TEXT correct_answer
       TIMESTAMP created_at
     }
+```
 
 ## データベーステーブル定義
 
