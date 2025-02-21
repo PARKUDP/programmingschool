@@ -8,7 +8,7 @@ import Login from './components/Login.tsx';
 import { DashboardGrid } from './components/Dashboard/DashboardGrid.tsx';
 import { AchievementList } from './components/Dashboard/AchievementList.tsx';
 import MaterialManagement from './components/MaterialManagement.tsx';
-import LessonManagement from './components/LessonManagement.tsx'; 
+import LessonManagement from './components/LessonManagement.tsx';
 import './styles/index.css';
 
 const App: React.FC = () => {

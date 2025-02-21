@@ -10,8 +10,8 @@ export const DashboardGrid: React.FC = () => {
         description="Variables and Data Types in Python"
         icon={<BookOpen className="h-6 w-6 text-[#4CAF50]" />}
         action={{
-          text: "Continue Learning",
-          onClick: () => console.log("Navigate to lesson"),
+          text: 'Continue Learning',
+          onClick: () => console.log('Navigate to lesson'),
         }}
       />
       <DashboardCard
@@ -19,8 +19,8 @@ export const DashboardGrid: React.FC = () => {
         description="5 new problems available"
         icon={<Code className="h-6 w-6 text-[#4CAF50]" />}
         action={{
-          text: "Start Coding",
-          onClick: () => console.log("Navigate to problems"),
+          text: 'Start Coding',
+          onClick: () => console.log('Navigate to problems'),
         }}
       />
       <DashboardCard
@@ -28,8 +28,8 @@ export const DashboardGrid: React.FC = () => {
         description="70% of Python Basics completed"
         icon={<Activity className="h-6 w-6 text-[#4CAF50]" />}
         action={{
-          text: "View Details",
-          onClick: () => console.log("Navigate to progress"),
+          text: 'View Details',
+          onClick: () => console.log('Navigate to progress'),
         }}
       />
     </div>

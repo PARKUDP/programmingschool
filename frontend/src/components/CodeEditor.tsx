@@ -5,7 +5,6 @@ const CodeEditor: React.FC = () => {
   const [code, setCode] = useState('');
   const [output, setOutput] = useState('');
 
-
   const handleRunCode = async () => {
     try {
       const response = await fetch('/api/execute', {
@@ -13,18 +12,18 @@ const CodeEditor: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
       });
-  
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-  
+
       const data = await response.json();
       setOutput(data.stdout || data.stderr || 'No output');
     } catch (error) {
       console.error('Error running code:', error);
       setOutput('An error occurred while executing the code.');
     }
-  };  
+  };
 
   return (
     <div>

@@ -9,12 +9,12 @@ const LessonManagement: React.FC = () => {
   const [lessons, setLessons] = useState([]);
   const [selectedLesson, setSelectedLesson] = useState<any>(null);
   const [title, setTitle] = useState('');
-  const [editor] = useState(() => new Editor({
-    extensions: [
-      StarterKit,
-      Image,
-    ]
-  }));
+  const [editor] = useState(
+    () =>
+      new Editor({
+        extensions: [StarterKit, Image],
+      })
+  );
 
   const fetchLessons = useCallback(async () => {
     const response = await fetch(`/api/admin/lessons/${materialId}`);
@@ -56,7 +56,9 @@ const LessonManagement: React.FC = () => {
     fetchLessons();
   };
 
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -70,7 +72,7 @@ const LessonManagement: React.FC = () => {
       });
       const data = await response.json();
       if (data.url) {
-        editor.chain().focus().setImage({ src: data.url }).run();  
+        editor.chain().focus().setImage({ src: data.url }).run();
       }
     } catch (error) {
       console.error('画像のアップロードに失敗しました', error);

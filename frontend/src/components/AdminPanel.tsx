@@ -8,7 +8,7 @@ const AdminPanel: React.FC = () => {
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
-  const [newUserRole, setNewUserRole] = useState('student'); 
+  const [newUserRole, setNewUserRole] = useState('student');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -24,7 +24,10 @@ const AdminPanel: React.FC = () => {
     await fetch('/api/admin/user/assign_material', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: selectedUser, material_id: selectedMaterial }),
+      body: JSON.stringify({
+        user_id: selectedUser,
+        material_id: selectedMaterial,
+      }),
     });
   };
 
@@ -51,7 +54,10 @@ const AdminPanel: React.FC = () => {
       <h1>管理者パネル</h1>
       <div>
         <h2>教材を割り当て</h2>
-        <select onChange={(e) => setSelectedUser(e.target.value)} value={selectedUser}>
+        <select
+          onChange={(e) => setSelectedUser(e.target.value)}
+          value={selectedUser}
+        >
           <option value="">ユーザーを選択</option>
           {users.map((user) => (
             <option key={user.id} value={user.id}>
@@ -59,7 +65,10 @@ const AdminPanel: React.FC = () => {
             </option>
           ))}
         </select>
-        <select onChange={(e) => setSelectedMaterial(e.target.value)} value={selectedMaterial}>
+        <select
+          onChange={(e) => setSelectedMaterial(e.target.value)}
+          value={selectedMaterial}
+        >
           <option value="">教材を選択</option>
           {materials.map((material) => (
             <option key={material.id} value={material.id}>
@@ -89,7 +98,10 @@ const AdminPanel: React.FC = () => {
           value={newUserPassword}
           onChange={(e) => setNewUserPassword(e.target.value)}
         />
-        <select onChange={(e) => setNewUserRole(e.target.value)} value={newUserRole}>
+        <select
+          onChange={(e) => setNewUserRole(e.target.value)}
+          value={newUserRole}
+        >
           <option value="student">生徒</option>
           <option value="teacher">先生</option>
         </select>

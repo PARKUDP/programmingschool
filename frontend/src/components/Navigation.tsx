@@ -10,12 +10,27 @@ export const Navigation: React.FC = () => {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Code className="h-8 w-8 text-[#4CAF50]" />
-              <span className="ml-2 text-xl font-bold text-gray-900">PyLearn</span>
+              <span className="ml-2 text-xl font-bold text-gray-900"
+              >
+                PyLearn
+              </span>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <NavLink icon={<Home className="h-5 w-5" />} text="Dashboard" href="/" />
-              <NavLink icon={<BookOpen className="h-5 w-5" />} text="Lessons" href="/lessons" />
-              <NavLink icon={<Code className="h-5 w-5" />} text="Practice" href="/practice" />
+              <NavLink
+                icon={<Home className="h-5 w-5" />}
+                text="Dashboard"
+                href="/"
+              />
+              <NavLink
+                icon={<BookOpen className="h-5 w-5" />}
+                text="Lessons"
+                href="/lessons"
+              />
+              <NavLink
+                icon={<Code className="h-5 w-5" />}
+                text="Practice"
+                href="/practice"
+              />
             </div>
           </div>
           <div className="flex items-center">
