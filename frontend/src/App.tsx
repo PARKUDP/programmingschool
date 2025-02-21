@@ -1,38 +1,21 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Navigation } from './components/Navigation.tsx';
-import Lessons from './components/Lessons.tsx';
-import CodeEditor from './components/CodeEditor.tsx';
-import AdminPanel from './components/AdminPanel.tsx';
-import Login from './components/Login.tsx';
-import { DashboardGrid } from './components/Dashboard/DashboardGrid.tsx';
-import { AchievementList } from './components/Dashboard/AchievementList.tsx';
-import MaterialManagement from './components/MaterialManagement.tsx';
-import LessonManagement from './components/LessonManagement.tsx';
-import './styles/index.css';
+import { useState, useEffect } from 'react';
 
-const App: React.FC = () => {
+function App() {
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:5050/health')
+      .then((res) => res.json())
+      .then((data) => setMessage(data.status))
+      .catch((err) => console.error('API Error:', err));
+  }, []);
+
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          <Routes>
-            <Route path="/materials" element={<MaterialManagement />} />
-            <Route path="/" element={<DashboardGrid />} />
-            <Route path="/lessons" element={<Lessons />} />
-            <Route path="/lessons/:materialId" element={<LessonManagement />} />
-            <Route path="/practice" element={<CodeEditor />} />
-            <Route path="/admin" element={<AdminPanel />} />
-            <Route path="/login" element={<Login />} />
-          </Routes>
-          <div className="mt-8">
-            <AchievementList />
-          </div>
-        </main>
-      </div>
-    </Router>
+    <div>
+      <h1>Hello, React + Flask!</h1>
+      <p>Flask API Status: {message}</p>
+    </div>
   );
-};
+}
 
 export default App;

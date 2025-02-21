@@ -1,0 +1,37 @@
+name: Frontend CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v3
+
+      - name: Node.js をセットアップ
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      - name: 依存関係をインストール
+        run: |
+          cd frontend
+          npm install
+
+      - name: Prettier でフォーマットチェック
+        run: |
+          cd frontend
+          npx prettier --check .
+
+      - name: Jest でテスト実行
+        run: |
+          cd frontend
+          npm test
