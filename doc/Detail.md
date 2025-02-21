@@ -49,14 +49,13 @@
    - 保存して公開
 
 ## **ER図**
-```mermaid
 ---
-title: "タイトル"
+title: "ER図"
 ---
 erDiagram
-    COURSES |o--|| MATERIALS : has
-    MATERIALS |o--|| LESSONS : has
-    LESSONS |o--|| PROBLEMS : has
+    COURSES ||--o{ MATERIALS : has
+    MATERIALS ||--o{ LESSONS : has
+    LESSONS ||--o{ PROBLEMS : has
 
     COURSES {
       INT id PK
@@ -66,24 +65,23 @@ erDiagram
     MATERIALS {
       INT id PK
       VARCHAR title
-      INT FK course_id
+      INT course_id  "FK to COURSES.id"
       TIMESTAMP created_at
     }
     LESSONS {
       INT id PK
       VARCHAR title
-      INT FK material_id
+      INT material_id  "FK to MATERIALS.id"
       TIMESTAMP created_at
     }
     PROBLEMS {
       INT id PK
-      INT FK lesson_id
+      INT lesson_id  "FK to LESSONS.id"
       TEXT problem_text
-      ENUM("text", "code", "multiple_choice") problem_type
+      ENUM text code multiple_choice problem_type
       TEXT correct_answer
       TIMESTAMP created_at
     }
-```
 
 ## データベーステーブル定義
 
