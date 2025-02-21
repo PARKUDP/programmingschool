@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Editor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -16,11 +16,11 @@ const LessonManagement: React.FC = () => {
     ]
   }));
 
-  const fetchLessons = async () => {
+  const fetchLessons = useCallback(async () => {
     const response = await fetch(`/api/admin/lessons/${materialId}`);
     const data = await response.json();
     setLessons(data);
-  };
+  }, [materialId]);
 
   const fetchLessonDetails = async (lessonId: number) => {
     const response = await fetch(`/api/admin/lesson/${lessonId}`);
@@ -80,7 +80,7 @@ const LessonManagement: React.FC = () => {
 
   useEffect(() => {
     fetchLessons();
-  }, []);
+  }, [fetchLessons]);
 
   return (
     <div>
