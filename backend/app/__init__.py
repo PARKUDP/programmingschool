@@ -6,6 +6,7 @@ from app.config import Config
 db = SQLAlchemy()
 migrate = Migrate()
 
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -13,7 +14,7 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
-    from app.models import Course, Material, Lesson, Problem  
+    from app.models import Course, Material, Lesson, Problem
 
     @app.route("/")
     def home():
@@ -22,4 +23,5 @@ def create_app():
     @app.route("/health")
     def health_check():
         return jsonify({"status": "OK"})
+
     return app
