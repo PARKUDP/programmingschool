@@ -8,6 +8,7 @@ migrate = Migrate()
 
 
 def create_app():
+    ## Flaskアプリケーションの作成
     app = Flask(__name__)
     app.config.from_object(Config)
 
