@@ -36,7 +36,8 @@ jobs:
 
       - name: 環境変数を設定
         run: |
-          echo "FLASK_APP=app.app" >> $GITHUB_ENV  # Flaskアプリケーションを指定
+          echo "FLASK_APP=app" >> $GITHUB_ENV
+          echo "PYTHONPATH=$PWD/backend" >> $GITHUB_ENV
 
       - name: データベースマイグレーションを実行
         run: |
@@ -56,4 +57,5 @@ jobs:
         run: |
           cd backend
           source venv/bin/activate
+          export PYTHONPATH=$(pwd)
           pytest
