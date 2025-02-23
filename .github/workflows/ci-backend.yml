@@ -29,6 +29,23 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: インスタンスディレクトリを作成
+        run: |
+          mkdir -p backend/app/instance
+          touch backend/app/instance/database.db  # SQLite用のデータベースファイルを作成
+
+      - name: 環境変数を設定
+        run: |
+          echo "FLASK_APP=app.app" >> $GITHUB_ENV  # Flaskアプリケーションを指定
+
+      - name: データベースマイグレーションを実行
+        run: |
+          cd backend
+          source venv/bin/activate
+          flask db init || true  # すでにinitされていればスキップ
+          flask db migrate -m "initial migration" || true
+          flask db upgrade
+
       - name: Black でフォーマットチェック
         run: |
           cd backend

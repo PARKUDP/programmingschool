@@ -13,6 +13,7 @@ __pycache__/
 *.eggs/
 *.pyo
 
+.pytest_cache/
 .env/
 venv/
 .venv/
