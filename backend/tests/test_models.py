@@ -4,7 +4,7 @@ from app.models import Course, Material, Lesson, Problem
 
 def test_create_course(test_client):
     """Course テーブルにデータを追加するテスト"""
-    with test_client.application.app_context():  
+    with test_client.application.app_context():
         course = Course(title="Python入門")
         db.session.add(course)
         db.session.commit()
