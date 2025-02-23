@@ -9,7 +9,7 @@ app.config.from_object(Config)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-from models import Course, Material, Lesson, Problem
+from app.models import Course, Material, Lesson, Problem
 
 if __name__ == "__main__":
     app.run(debug=True)
