@@ -1,2 +1,7 @@
 [tool.black]
-exclude = "migrations/"
+exclude = '''
+(
+  /venv/  # venv を除外
+  | /migrations/  # migrations ディレクトリも除外したい場合
+)
+'''
