@@ -1,4 +1,4 @@
-from app import db
+from app.app import db
 
 
 class Course(db.Model):
@@ -57,11 +57,15 @@ class Problem(db.Model):
         db.Integer, db.ForeignKey("lessons.id", ondelete="CASCADE"), nullable=False
     )
     problem_text = db.Column(db.Text, nullable=False)
-    problem_type = db.Column(
-        db.Enum("text", "code", "multiple_choice", name="problem_type_enum"),
-        nullable=False,
-    )
+    problem_type = db.Column(db.String(20), nullable=False)
     correct_answer = db.Column(db.Text, nullable=False)
     created_at = db.Column(
         db.TIMESTAMP, server_default=db.func.current_timestamp(), nullable=False
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "problem_type IN ('text', 'code', 'multiple_choice')",
+            name="check_problem_type",
+        ),
     )
