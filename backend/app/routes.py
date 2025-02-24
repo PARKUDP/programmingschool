@@ -8,9 +8,11 @@ routes = Blueprint("routes", __name__)
 def home():
     return jsonify({"message": "Backend is running!"})
 
+
 @routes.route("/health")
 def health_check():
     return jsonify({"status": "OK"})
+
 
 @routes.route("/courses", methods=["GET"])
 def get_courses():
