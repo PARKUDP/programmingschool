@@ -2,6 +2,7 @@ import pytest
 from app import db, create_app
 from app.models import Course, Material, Lesson, Problem
 
+
 @pytest.fixture(scope="module")
 def test_client():
     """Flask test client setup"""
