@@ -54,7 +54,7 @@ jobs:
           source venv/bin/activate
           black --check .
 
-            - name: Pytest でテスト実行
+      - name: Pytest でテスト実行
         run: |
           cd backend
           source venv/bin/activate
