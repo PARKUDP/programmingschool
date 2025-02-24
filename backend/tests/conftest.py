@@ -11,9 +11,12 @@ def test_client():
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+    with app.app_context():
+        db.create_all()
+
     with app.test_client() as testing_client:
-        with app.app_context():
-            db.create_all()
-            yield testing_client
-            db.session.remove()
-            db.drop_all()
+        yield testing_client
+
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
