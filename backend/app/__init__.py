@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from app.config import Config
@@ -8,7 +8,6 @@ migrate = Migrate()
 
 
 def create_app():
-    ## Flaskアプリケーションの作成
     app = Flask(__name__)
     app.config.from_object(Config)
 
@@ -17,12 +16,7 @@ def create_app():
 
     from app.models import Course, Material, Lesson, Problem
 
-    @app.route("/")
-    def home():
-        return jsonify({"message": "Backend is running!"})
-
-    @app.route("/health")
-    def health_check():
-        return jsonify({"status": "OK"})
+    with app.app_context():
+        db.create_all()
 
     return app

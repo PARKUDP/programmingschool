@@ -4,6 +4,14 @@ from app.models import Course, Material, Lesson, Problem
 routes = Blueprint("routes", __name__)
 
 
+@routes.route("/")
+def home():
+    return jsonify({"message": "Backend is running!"})
+
+@routes.route("/health")
+def health_check():
+    return jsonify({"status": "OK"})
+
 @routes.route("/courses", methods=["GET"])
 def get_courses():
     courses = Course.query.all()

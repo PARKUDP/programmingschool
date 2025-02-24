@@ -1,6 +1,5 @@
 import pytest
 from app import create_app, db
-from app.models import Course, Material, Lesson, Problem
 
 
 @pytest.fixture(scope="module")
