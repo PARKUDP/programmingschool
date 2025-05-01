@@ -1,53 +1,67 @@
-from . import db
+from app import db
 
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'admin', 'student', 'teacher'
-    submissions = db.relationship("Submission", backref="user", lazy=True)
+class Course(db.Model):
+    __tablename__ = "courses"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    title = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(
+        db.TIMESTAMP, server_default=db.func.current_timestamp(), nullable=False
+    )
+
+    materials = db.relationship(
+        "Material", backref="course", cascade="all, delete-orphan"
+    )
 
 
 class Material(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text)
+    __tablename__ = "materials"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    title = db.Column(db.String(255), nullable=False)
+    course_id = db.Column(
+        db.Integer, db.ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at = db.Column(
+        db.TIMESTAMP, server_default=db.func.current_timestamp(), nullable=False
+    )
+
     lessons = db.relationship(
-        "Lesson", backref="material", cascade="all, delete-orphan", lazy=True
+        "Lesson", backref="material", cascade="all, delete-orphan"
     )
 
 
 class Lesson(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    material_id = db.Column(db.Integer, db.ForeignKey("material.id"), nullable=False)
-    title = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text)
+    __tablename__ = "lessons"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    title = db.Column(db.String(255), nullable=False)
+    material_id = db.Column(
+        db.Integer, db.ForeignKey("materials.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at = db.Column(
+        db.TIMESTAMP, server_default=db.func.current_timestamp(), nullable=False
+    )
+
     problems = db.relationship(
-        "Problem", backref="lesson", cascade="all, delete-orphan", lazy=True
+        "Problem", backref="lesson", cascade="all, delete-orphan"
     )
 
 
 class Problem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    lesson_id = db.Column(db.Integer, db.ForeignKey("lesson.id"), nullable=False)
-    input = db.Column(db.Text, nullable=False)
-    expected_output = db.Column(db.Text, nullable=False)
-    submissions = db.relationship("Submission", backref="problem", lazy=True)
+    __tablename__ = "problems"
 
-
-class Progress(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    lesson_id = db.Column(db.Integer, db.ForeignKey("lesson.id"), nullable=False)
-    status = db.Column(db.String(20), nullable=False, default="not_started")
-
-
-class Submission(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    problem_id = db.Column(db.Integer, db.ForeignKey("problem.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    code = db.Column(db.Text, nullable=False)
-    result = db.Column(db.String(20), nullable=False, default="pending")
-    output = db.Column(db.Text)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    lesson_id = db.Column(
+        db.Integer, db.ForeignKey("lessons.id", ondelete="CASCADE"), nullable=False
+    )
+    problem_text = db.Column(db.Text, nullable=False)
+    problem_type = db.Column(
+        db.Enum("text", "code", "multiple_choice", name="problem_type_enum"),
+        nullable=False,
+    )
+    correct_answer = db.Column(db.Text, nullable=False)
+    created_at = db.Column(
+        db.TIMESTAMP, server_default=db.func.current_timestamp(), nullable=False
+    )
