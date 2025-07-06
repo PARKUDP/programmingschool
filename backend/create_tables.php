@@ -52,5 +52,9 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS submission (
     FOREIGN KEY(problem_id) REFERENCES problem(id) ON DELETE CASCADE
 );");
 
+$adminHash = password_hash('admin', PASSWORD_DEFAULT);
+$stmt = $pdo->prepare("INSERT OR IGNORE INTO user (username, password_hash, is_admin) VALUES ('admin', ?, 1)");
+$stmt->execute([$adminHash]);
+
 echo "Tables created\n";
 ?>

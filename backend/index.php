@@ -12,6 +12,37 @@ function json_response($data, $status = 200) {
     exit();
 }
 
+if ($path === '/api/register' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['username']) || !isset($data['password'])) {
+        json_response(['error' => 'username and password required'], 400);
+    }
+    $is_admin = !empty($data['is_admin']) ? 1 : 0;
+    $stmt = $pdo->prepare('SELECT id FROM user WHERE username = ?');
+    $stmt->execute([$data['username']]);
+    if ($stmt->fetch()) {
+        json_response(['error' => 'username exists'], 409);
+    }
+    $hash = password_hash($data['password'], PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('INSERT INTO user (username, password_hash, is_admin) VALUES (?,?,?)');
+    $stmt->execute([$data['username'], $hash, $is_admin]);
+    json_response(['message' => 'User created', 'user_id' => $pdo->lastInsertId()], 201);
+}
+
+if ($path === '/api/login' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['username']) || !isset($data['password'])) {
+        json_response(['error' => 'username and password required'], 400);
+    }
+    $stmt = $pdo->prepare('SELECT id, password_hash, is_admin FROM user WHERE username = ?');
+    $stmt->execute([$data['username']]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user || !password_verify($data['password'], $user['password_hash'])) {
+        json_response(['error' => 'invalid credentials'], 401);
+    }
+    json_response(['message' => 'Logged in', 'user_id' => $user['id'], 'is_admin' => (int)$user['is_admin']]);
+}
+
 if ($path === '/api/materials' && $method === 'GET') {
     $stmt = $pdo->query('SELECT id, title FROM material');
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
