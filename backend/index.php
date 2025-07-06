@@ -153,5 +153,78 @@ if (preg_match('#^/api/submissions/(\d+)$#', $path, $m) && $method === 'GET') {
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
 
+if ($path === '/api/progress' && $method === 'GET') {
+    $user_id = $_GET['user_id'] ?? null;
+
+    if ($user_id) {
+        $totalStmt = $pdo->prepare('SELECT COUNT(*) FROM submission WHERE user_id = ?');
+        $totalStmt->execute([$user_id]);
+        $totalSub = (int)$totalStmt->fetchColumn();
+
+        $correctStmt = $pdo->prepare("SELECT COUNT(*) FROM submission WHERE user_id = ? AND result = 'AC'");
+        $correctStmt->execute([$user_id]);
+        $correct = (int)$correctStmt->fetchColumn();
+
+        $attemptedStmt = $pdo->prepare('SELECT COUNT(DISTINCT problem_id) FROM submission WHERE user_id = ?');
+        $attemptedStmt->execute([$user_id]);
+        $attempted = (int)$attemptedStmt->fetchColumn();
+    } else {
+        $totalStmt = $pdo->query('SELECT COUNT(*) FROM submission');
+        $totalSub = (int)$totalStmt->fetchColumn();
+
+        $correctStmt = $pdo->query("SELECT COUNT(*) FROM submission WHERE result = 'AC'");
+        $correct = (int)$correctStmt->fetchColumn();
+
+        $attemptedStmt = $pdo->query('SELECT COUNT(DISTINCT problem_id) FROM submission');
+        $attempted = (int)$attemptedStmt->fetchColumn();
+    }
+
+    $incorrect = $totalSub - $correct;
+    $totalProblemStmt = $pdo->query('SELECT COUNT(*) FROM problem');
+    $totalProblems = (int)$totalProblemStmt->fetchColumn();
+    $unsubmitted = $totalProblems - $attempted;
+
+    if ($user_id) {
+        $dailyStmt = $pdo->prepare('SELECT substr(submitted_at,1,10) as date, COUNT(*) as count FROM submission WHERE user_id = ? GROUP BY substr(submitted_at,1,10)');
+        $dailyStmt->execute([$user_id]);
+    } else {
+        $dailyStmt = $pdo->query('SELECT substr(submitted_at,1,10) as date, COUNT(*) as count FROM submission GROUP BY substr(submitted_at,1,10)');
+    }
+    $daily = $dailyStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $materials = [];
+    $matStmt = $pdo->query('SELECT id, title FROM material');
+    foreach ($matStmt as $m) {
+        $totalP = $pdo->prepare('SELECT COUNT(*) FROM problem JOIN lesson ON problem.lesson_id = lesson.id WHERE lesson.material_id = ?');
+        $totalP->execute([$m['id']]);
+        $total = (int)$totalP->fetchColumn();
+
+        if ($user_id) {
+            $compStmt = $pdo->prepare('SELECT COUNT(DISTINCT problem.id) FROM problem JOIN lesson ON problem.lesson_id = lesson.id JOIN submission s ON s.problem_id = problem.id WHERE s.user_id = ? AND s.result = "AC" AND lesson.material_id = ?');
+            $compStmt->execute([$user_id, $m['id']]);
+        } else {
+            $compStmt = $pdo->prepare('SELECT COUNT(DISTINCT problem.id) FROM problem JOIN lesson ON problem.lesson_id = lesson.id JOIN submission s ON s.problem_id = problem.id WHERE s.result = "AC" AND lesson.material_id = ?');
+            $compStmt->execute([$m['id']]);
+        }
+        $completed = (int)$compStmt->fetchColumn();
+
+        $materials[] = [
+            'material_id' => (int)$m['id'],
+            'title' => $m['title'],
+            'completed' => $completed,
+            'total' => $total
+        ];
+    }
+
+    json_response([
+        'total_problems' => $totalProblems,
+        'correct' => $correct,
+        'incorrect' => $incorrect,
+        'unsubmitted' => $unsubmitted,
+        'daily_counts' => $daily,
+        'material_progress' => $materials
+    ]);
+}
+
 json_response(['error' => 'Not found'], 404);
 ?>

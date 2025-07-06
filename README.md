@@ -138,3 +138,8 @@ docker-compose up --build
 
 * フロントエンド: [http://localhost:3000](http://localhost:3000)
 * バックエンド API: [http://localhost:5050](http://localhost:5050)
+
+### ダッシュボード
+
+学習者用 `/dashboard` と管理者用 `/admin/dashboard` では Recharts を利用した
+円グラフ・棒グラフ・進捗バーで提出状況を確認できます。
