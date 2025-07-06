@@ -4,10 +4,11 @@ import ProblemList from "./pages/ProblemList";
 import ProblemDetail from "./pages/ProblemDetail";
 import SubmissionHistory from "./pages/SubmissionHistory";
 import Login from "./pages/Login";
-import AdminCreateProblem from "./pages/AdminCreateProblem"
+import AdminCreateProblem from "./pages/AdminCreateProblem";
 import AdminMaterialList from "./pages/AdminMaterialList";
 import AdminLessonList from "./pages/AdminLessonList";
 import AdminRegisterUser from "./pages/AdminRegisterUser";
+import AdminCreateTestCase from "./pages/AdminCreateTestCase";
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
         <Route path="/admin/materials/:materialId/lessons" element={<AdminLessonList />} />
         <Route path="/admin/problems/create" element={<AdminCreateProblem />} />
         <Route path="/admin/users/register" element={<AdminRegisterUser />} />
+        <Route path="/admin/problems/:problemId/testcases" element={<AdminCreateTestCase />} />
       </Routes>
     </Router>
   );
