@@ -94,6 +94,64 @@ if ($path === '/api/problems' && $method === 'POST') {
     json_response(['message' => 'Problem created', 'problem_id' => $pdo->lastInsertId()], 201);
 }
 
+if ($path === '/api/assignments' && $method === 'GET') {
+    $stmt = $pdo->query('SELECT id, lesson_id, title, description, question_text, input_example, file_path, created_at FROM assignment');
+    json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+if ($path === '/api/assignments' && $method === 'POST') {
+    $title = $_POST['title'] ?? null;
+    $lesson_id = $_POST['lesson_id'] ?? null;
+    if (!$title || !$lesson_id) json_response(['error' => 'title and lesson_id required'], 400);
+    $description = $_POST['description'] ?? null;
+    $question_text = $_POST['question_text'] ?? null;
+    $input_example = $_POST['input_example'] ?? null;
+
+    $file_path = null;
+    if (!empty($_FILES['file']['tmp_name'])) {
+        $uploadDir = __DIR__ . '/uploads';
+        if (!is_dir($uploadDir)) mkdir($uploadDir);
+        $name = uniqid() . '_' . basename($_FILES['file']['name']);
+        $dest = $uploadDir . '/' . $name;
+        if (move_uploaded_file($_FILES['file']['tmp_name'], $dest)) {
+            $file_path = 'uploads/' . $name;
+        }
+    }
+
+    $stmt = $pdo->prepare('INSERT INTO assignment (lesson_id, title, description, question_text, input_example, file_path, created_at) VALUES (?,?,?,?,?,?,datetime("now"))');
+    $stmt->execute([$lesson_id, $title, $description, $question_text, $input_example, $file_path]);
+    json_response(['message' => 'Assignment created', 'assignment_id' => $pdo->lastInsertId()], 201);
+}
+
+if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'GET') {
+    $stmt = $pdo->prepare('SELECT id, lesson_id, title, description, question_text, input_example, file_path, created_at FROM assignment WHERE id = ?');
+    $stmt->execute([$m[1]]);
+    $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$assignment) json_response(['error' => 'Not found'], 404);
+    json_response($assignment);
+}
+
+if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!$data) json_response(['error' => 'invalid json'], 400);
+    $stmt = $pdo->prepare('UPDATE assignment SET title = COALESCE(?, title), description = COALESCE(?, description), question_text = COALESCE(?, question_text), input_example = COALESCE(?, input_example) WHERE id = ?');
+    $stmt->execute([
+        $data['title'] ?? null,
+        $data['description'] ?? null,
+        $data['question_text'] ?? null,
+        $data['input_example'] ?? null,
+        $id
+    ]);
+    json_response(['message' => 'Assignment updated']);
+}
+
+if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $stmt = $pdo->prepare('DELETE FROM assignment WHERE id = ?');
+    $stmt->execute([$m[1]]);
+    json_response(['message' => 'Assignment deleted']);
+}
+
 if ($path === '/api/testcases' && $method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['problem_id']) || !array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
