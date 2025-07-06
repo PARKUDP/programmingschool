@@ -7,13 +7,13 @@ const AdminMaterialList: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch("http://localhost:5001/api/materials")
+    fetch("http://localhost:5050/api/materials")
       .then((res) => res.json())
       .then((data) => setMaterials(data));
   }, []);
 
   const handleCreate = () => {
-    fetch("http://localhost:5001/api/materials", {
+    fetch("http://localhost:5050/api/materials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: newTitle }),
@@ -21,7 +21,7 @@ const AdminMaterialList: React.FC = () => {
       .then((res) => res.json())
       .then(() => {
         setNewTitle("");
-        return fetch("http://localhost:5001/api/materials");
+        return fetch("http://localhost:5050/api/materials");
       })
       .then((res) => res.json())
       .then((data) => setMaterials(data));

@@ -13,7 +13,7 @@ const SubmissionHistory: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:5001/api/submissions/1")
+    fetch("http://localhost:5050/api/submissions/1")
       .then((res) => res.json())
       .then((data) => {
         setSubmissions(data);
