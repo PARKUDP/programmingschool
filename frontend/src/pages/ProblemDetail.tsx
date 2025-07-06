@@ -18,7 +18,7 @@ const ProblemDetail: React.FC = () => {
   const [result, setResult] = useState<string>("");
 
   useEffect(() => {
-    fetch("http://localhost:5001/api/problems")
+    fetch("http://localhost:5050/api/problems")
       .then((res) => res.json())
       .then((data) => {
         const found = data.find((p: Problem) => p.id === Number(id));
@@ -27,7 +27,7 @@ const ProblemDetail: React.FC = () => {
   }, [id]);
 
   const handleSubmit = () => {
-    fetch("http://localhost:5001/api/submit", {
+    fetch("http://localhost:5050/api/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

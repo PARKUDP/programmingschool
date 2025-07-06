@@ -14,7 +14,7 @@ const ProblemList: React.FC = () => {
   const [problems, setProblems] = useState<Problem[]>([]);
 
   useEffect(() => {
-    fetch("http://localhost:5001/api/problems")
+    fetch("http://localhost:5050/api/problems")
       .then((res) => res.json())
       .then((data) => setProblems(data))
       .catch((err) => console.error("問題の取得に失敗しました:", err));

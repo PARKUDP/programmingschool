@@ -11,7 +11,7 @@ const Login: React.FC = () => {
   const [error, setError] = useState("");
 
   const handleLogin = () => {
-    fetch("http://localhost:5001/api/login", {
+    fetch("http://localhost:5050/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),

@@ -10,7 +10,7 @@ const AdminCreateProblem = () => {
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch("http://localhost:5001/api/lessons")
+    fetch("http://localhost:5050/api/lessons")
       .then((res) => res.json())
       .then((data) => setLessons(data));
   }, []);
@@ -18,7 +18,7 @@ const AdminCreateProblem = () => {
   const handleCreateProblem = () => {
     if (!selectedLessonId) return;
 
-    fetch("http://localhost:5001/api/problems", {
+    fetch("http://localhost:5050/api/problems", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

@@ -15,13 +15,13 @@ const AdminLessonList: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(`http://localhost:5001/api/lessons/by_material?material_id=${id}`)
+    fetch(`http://localhost:5050/api/lessons/by_material?material_id=${id}`)
       .then(res => res.json())
       .then(data => setLessons(data));
   }, [id]);
 
   const handleCreate = () => {
-    fetch("http://localhost:5001/api/lessons", {
+    fetch("http://localhost:5050/api/lessons", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
