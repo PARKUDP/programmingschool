@@ -56,6 +56,22 @@ if ($path === '/api/materials' && $method === 'POST') {
     json_response(['message' => 'Created', 'material_id' => $pdo->lastInsertId()], 201);
 }
 
+if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $material_id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
+    $stmt = $pdo->prepare('UPDATE material SET title = ? WHERE id = ?');
+    $stmt->execute([$data['title'], $material_id]);
+    json_response(['message' => 'Updated']);
+}
+
+if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $material_id = $m[1];
+    $stmt = $pdo->prepare('DELETE FROM material WHERE id = ?');
+    $stmt->execute([$material_id]);
+    json_response(['message' => 'Deleted']);
+}
+
 if ($path === '/api/lessons' && $method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['material_id']) || !isset($data['title'])) {
@@ -64,6 +80,27 @@ if ($path === '/api/lessons' && $method === 'POST') {
     $stmt = $pdo->prepare('INSERT INTO lesson (material_id, title, description) VALUES (?,?,?)');
     $stmt->execute([$data['material_id'], $data['title'], $data['description'] ?? null]);
     json_response(['message' => 'Lesson created', 'lesson_id' => $pdo->lastInsertId()], 201);
+}
+
+if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $lesson_id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
+    $stmt = $pdo->prepare('UPDATE lesson SET material_id = ?, title = ?, description = ? WHERE id = ?');
+    $stmt->execute([
+        $data['material_id'] ?? null,
+        $data['title'],
+        $data['description'] ?? null,
+        $lesson_id
+    ]);
+    json_response(['message' => 'Lesson updated']);
+}
+
+if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $lesson_id = $m[1];
+    $stmt = $pdo->prepare('DELETE FROM lesson WHERE id = ?');
+    $stmt->execute([$lesson_id]);
+    json_response(['message' => 'Lesson deleted']);
 }
 
 if ($path === '/api/lessons/by_material' && $method === 'GET') {
