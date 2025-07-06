@@ -8,6 +8,7 @@ import AdminCreateProblem from "./pages/AdminCreateProblem"
 import AdminMaterialList from "./pages/AdminMaterialList";
 import AdminLessonList from "./pages/AdminLessonList";
 import AdminRegisterUser from "./pages/AdminRegisterUser";
+import ChangePassword from "./pages/ChangePassword";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/problems/:id" element={<ProblemDetail />} />
         <Route path="/submissions" element={<SubmissionHistory />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/admin/materials" element={<AdminMaterialList />} />
         <Route path="/admin/materials/:materialId/lessons" element={<AdminLessonList />} />
         <Route path="/admin/problems/create" element={<AdminCreateProblem />} />

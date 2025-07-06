@@ -43,6 +43,34 @@ if ($path === '/api/login' && $method === 'POST') {
     json_response(['message' => 'Logged in', 'user_id' => $user['id'], 'is_admin' => (int)$user['is_admin']]);
 }
 
+if ($path === '/api/change_password' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['user_id']) || !isset($data['old_password']) || !isset($data['new_password'])) {
+        json_response(['error' => 'user_id, old_password and new_password required'], 400);
+    }
+    $stmt = $pdo->prepare('SELECT password_hash FROM user WHERE id = ?');
+    $stmt->execute([$data['user_id']]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user || !password_verify($data['old_password'], $user['password_hash'])) {
+        json_response(['error' => 'invalid credentials'], 401);
+    }
+    $newHash = password_hash($data['new_password'], PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('UPDATE user SET password_hash = ? WHERE id = ?');
+    $stmt->execute([$newHash, $data['user_id']]);
+    json_response(['message' => 'Password changed']);
+}
+
+if ($path === '/api/reset_password' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['user_id']) || !isset($data['new_password'])) {
+        json_response(['error' => 'user_id and new_password required'], 400);
+    }
+    $newHash = password_hash($data['new_password'], PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('UPDATE user SET password_hash = ? WHERE id = ?');
+    $stmt->execute([$newHash, $data['user_id']]);
+    json_response(['message' => 'Password reset']);
+}
+
 if ($path === '/api/materials' && $method === 'GET') {
     $stmt = $pdo->query('SELECT id, title FROM material');
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
