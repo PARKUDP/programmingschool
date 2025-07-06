@@ -1,25 +1,3 @@
-````md
-# 概要
-
-本アプリケーションは、プログラミング教材を配信する学習管理システムです。  
-管理者は教材とレッスン、問題を登録し、ユーザーは出題された問題を解いて進捗を確認できます。
-
-- フロントエンド: React (`frontend` ディレクトリ)
-- バックエンド: PHP + SQLite (`backend` ディレクトリ)
-
-## 起動方法
-
-Docker Compose を使用してフロントエンドとバックエンドを同時に起動できます：
-
-```bash
-docker-compose up --build
-````
-
-* フロントエンド: [http://localhost:3000](http://localhost:3000)
-* バックエンド API: [http://localhost:5050](http://localhost:5050)
-
----
-
 # 📘 要件定義書：Kidz8
 
 ## 1. 🎯 概要
@@ -148,3 +126,15 @@ docker-compose up --build
 3. 宿題提出＋テストケース実行
 4. 自動採点ロジック
 5. 学習者・講師ダッシュボード（進捗可視化）
+
+
+## 起動方法
+
+Docker Compose を使用してフロントエンドとバックエンドを同時に起動できます：
+
+```bash
+docker-compose up --build
+````
+
+* フロントエンド: [http://localhost:3000](http://localhost:3000)
+* バックエンド API: [http://localhost:5050](http://localhost:5050)
