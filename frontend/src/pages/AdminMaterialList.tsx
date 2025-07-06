@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const AdminMaterialList: React.FC = () => {
   const [materials, setMaterials] = useState([]);
   const [newTitle, setNewTitle] = useState("");
   const navigate = useNavigate();
+  const { authFetch } = useAuth();
 
   useEffect(() => {
-    fetch("http://localhost:5050/api/materials")
+    authFetch("http://localhost:5050/api/materials")
       .then((res) => res.json())
       .then((data) => setMaterials(data));
   }, []);
 
   const handleCreate = () => {
-    fetch("http://localhost:5050/api/materials", {
+    authFetch("http://localhost:5050/api/materials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: newTitle }),
@@ -21,7 +23,7 @@ const AdminMaterialList: React.FC = () => {
       .then((res) => res.json())
       .then(() => {
         setNewTitle("");
-        return fetch("http://localhost:5050/api/materials");
+        return authFetch("http://localhost:5050/api/materials");
       })
       .then((res) => res.json())
       .then((data) => setMaterials(data));

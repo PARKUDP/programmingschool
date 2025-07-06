@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import ReactMarkdown from "react-markdown";
 import CodeEditor from "../components/CodeEditor";
 
@@ -13,12 +14,13 @@ type Problem = {
 
 const ProblemDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const { authFetch } = useAuth();
   const [problem, setProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState<string>("# Pythonのコードをここに書いてください");
   const [result, setResult] = useState<string>("");
 
   useEffect(() => {
-    fetch("http://localhost:5050/api/problems")
+    authFetch("http://localhost:5050/api/problems")
       .then((res) => res.json())
       .then((data) => {
         const found = data.find((p: Problem) => p.id === Number(id));
@@ -27,11 +29,10 @@ const ProblemDetail: React.FC = () => {
   }, [id]);
 
   const handleSubmit = () => {
-    fetch("http://localhost:5050/api/submit", {
+    authFetch("http://localhost:5050/api/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: 1,
         problem_id: Number(id),
         code: code,
       }),

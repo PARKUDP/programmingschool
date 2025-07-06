@@ -1,13 +1,15 @@
 import React, { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 const AdminRegisterUser: React.FC = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [message, setMessage] = useState("");
+  const { authFetch } = useAuth();
 
   const handleRegister = () => {
-    fetch("http://localhost:5050/api/register", {
+    authFetch("http://localhost:5050/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password, is_admin: isAdmin }),

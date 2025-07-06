@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 type Lesson = {
   id: number;
@@ -8,9 +9,10 @@ type Lesson = {
 const AdminCreateProblem = () => {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
+  const { authFetch } = useAuth();
 
   useEffect(() => {
-    fetch("http://localhost:5050/api/lessons")
+    authFetch("http://localhost:5050/api/lessons")
       .then((res) => res.json())
       .then((data) => setLessons(data));
   }, []);
@@ -18,7 +20,7 @@ const AdminCreateProblem = () => {
   const handleCreateProblem = () => {
     if (!selectedLessonId) return;
 
-    fetch("http://localhost:5050/api/problems", {
+    authFetch("http://localhost:5050/api/problems", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import ReactMarkdown from "react-markdown";
 
 type Problem = {
@@ -12,9 +13,10 @@ type Problem = {
 
 const ProblemList: React.FC = () => {
   const [problems, setProblems] = useState<Problem[]>([]);
+  const { authFetch } = useAuth();
 
   useEffect(() => {
-    fetch("http://localhost:5050/api/problems")
+    authFetch("http://localhost:5050/api/problems")
       .then((res) => res.json())
       .then((data) => setProblems(data))
       .catch((err) => console.error("問題の取得に失敗しました:", err));
