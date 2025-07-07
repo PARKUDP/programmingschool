@@ -32,6 +32,18 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS problem (
     FOREIGN KEY(lesson_id) REFERENCES lesson(id) ON DELETE CASCADE
 );");
 
+$pdo->exec("CREATE TABLE IF NOT EXISTS assignment (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lesson_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    question_text TEXT,
+    input_example TEXT,
+    file_path TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(lesson_id) REFERENCES lesson(id) ON DELETE CASCADE
+);");
+
 $pdo->exec("CREATE TABLE IF NOT EXISTS test_case (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     problem_id INTEGER NOT NULL,

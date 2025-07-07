@@ -6,6 +6,60 @@ header('Content-Type: application/json');
 $method = $_SERVER['REQUEST_METHOD'];
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
+// Simple JWT utilities
+$secret = getenv('JWT_SECRET') ?: 'secretkey';
+$current_user = null;
+
+function base64url_encode(string $data): string {
+    return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+}
+
+function base64url_decode(string $data): string {
+    return base64_decode(strtr($data, '-_', '+/'));
+}
+
+function generate_jwt(array $payload, string $secret, int $exp = 3600): string {
+    $header = ['alg' => 'HS256', 'typ' => 'JWT'];
+    $payload['exp'] = time() + $exp;
+    $segments = [
+        base64url_encode(json_encode($header)),
+        base64url_encode(json_encode($payload))
+    ];
+    $signature = hash_hmac('sha256', implode('.', $segments), $secret, true);
+    $segments[] = base64url_encode($signature);
+    return implode('.', $segments);
+}
+
+function verify_jwt(string $token, string $secret) {
+    $parts = explode('.', $token);
+    if (count($parts) !== 3) return false;
+    list($h64, $p64, $s64) = $parts;
+    $payload = json_decode(base64url_decode($p64), true);
+    if (!$payload || ($payload['exp'] ?? 0) < time()) return false;
+    $sig = base64url_decode($s64);
+    $valid = hash_hmac('sha256', "$h64.$p64", $secret, true);
+    if (!hash_equals($valid, $sig)) return false;
+    return $payload;
+}
+
+function require_auth() {
+    global $secret, $current_user;
+    $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (preg_match('/Bearer\s+(.*)/', $auth, $m)) {
+        $payload = verify_jwt($m[1], $secret);
+        if ($payload) {
+            $current_user = $payload;
+            return;
+        }
+    }
+    json_response(['error' => 'Unauthorized'], 401);
+}
+
+$public_paths = ['/api/login', '/api/register'];
+if (!in_array($path, $public_paths)) {
+    require_auth();
+}
+
 function json_response($data, $status = 200) {
     http_response_code($status);
     echo json_encode($data);
@@ -40,7 +94,41 @@ if ($path === '/api/login' && $method === 'POST') {
     if (!$user || !password_verify($data['password'], $user['password_hash'])) {
         json_response(['error' => 'invalid credentials'], 401);
     }
-    json_response(['message' => 'Logged in', 'user_id' => $user['id'], 'is_admin' => (int)$user['is_admin']]);
+    $token = generate_jwt(['id' => $user['id'], 'username' => $data['username'], 'is_admin' => (int)$user['is_admin']], $secret);
+    json_response([
+        'message' => 'Logged in',
+        'token' => $token,
+        'user_id' => $user['id'],
+        'is_admin' => (int)$user['is_admin']
+    ]);
+}
+
+if ($path === '/api/change_password' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['user_id']) || !isset($data['old_password']) || !isset($data['new_password'])) {
+        json_response(['error' => 'user_id, old_password and new_password required'], 400);
+    }
+    $stmt = $pdo->prepare('SELECT password_hash FROM user WHERE id = ?');
+    $stmt->execute([$data['user_id']]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user || !password_verify($data['old_password'], $user['password_hash'])) {
+        json_response(['error' => 'invalid credentials'], 401);
+    }
+    $newHash = password_hash($data['new_password'], PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('UPDATE user SET password_hash = ? WHERE id = ?');
+    $stmt->execute([$newHash, $data['user_id']]);
+    json_response(['message' => 'Password changed']);
+}
+
+if ($path === '/api/reset_password' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['user_id']) || !isset($data['new_password'])) {
+        json_response(['error' => 'user_id and new_password required'], 400);
+    }
+    $newHash = password_hash($data['new_password'], PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('UPDATE user SET password_hash = ? WHERE id = ?');
+    $stmt->execute([$newHash, $data['user_id']]);
+    json_response(['message' => 'Password reset']);
 }
 
 if ($path === '/api/materials' && $method === 'GET') {
@@ -56,6 +144,22 @@ if ($path === '/api/materials' && $method === 'POST') {
     json_response(['message' => 'Created', 'material_id' => $pdo->lastInsertId()], 201);
 }
 
+if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $material_id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
+    $stmt = $pdo->prepare('UPDATE material SET title = ? WHERE id = ?');
+    $stmt->execute([$data['title'], $material_id]);
+    json_response(['message' => 'Updated']);
+}
+
+if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $material_id = $m[1];
+    $stmt = $pdo->prepare('DELETE FROM material WHERE id = ?');
+    $stmt->execute([$material_id]);
+    json_response(['message' => 'Deleted']);
+}
+
 if ($path === '/api/lessons' && $method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['material_id']) || !isset($data['title'])) {
@@ -64,6 +168,27 @@ if ($path === '/api/lessons' && $method === 'POST') {
     $stmt = $pdo->prepare('INSERT INTO lesson (material_id, title, description) VALUES (?,?,?)');
     $stmt->execute([$data['material_id'], $data['title'], $data['description'] ?? null]);
     json_response(['message' => 'Lesson created', 'lesson_id' => $pdo->lastInsertId()], 201);
+}
+
+if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $lesson_id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
+    $stmt = $pdo->prepare('UPDATE lesson SET material_id = ?, title = ?, description = ? WHERE id = ?');
+    $stmt->execute([
+        $data['material_id'] ?? null,
+        $data['title'],
+        $data['description'] ?? null,
+        $lesson_id
+    ]);
+    json_response(['message' => 'Lesson updated']);
+}
+
+if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $lesson_id = $m[1];
+    $stmt = $pdo->prepare('DELETE FROM lesson WHERE id = ?');
+    $stmt->execute([$lesson_id]);
+    json_response(['message' => 'Lesson deleted']);
 }
 
 if ($path === '/api/lessons/by_material' && $method === 'GET') {
@@ -94,6 +219,64 @@ if ($path === '/api/problems' && $method === 'POST') {
     json_response(['message' => 'Problem created', 'problem_id' => $pdo->lastInsertId()], 201);
 }
 
+if ($path === '/api/assignments' && $method === 'GET') {
+    $stmt = $pdo->query('SELECT id, lesson_id, title, description, question_text, input_example, file_path, created_at FROM assignment');
+    json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+if ($path === '/api/assignments' && $method === 'POST') {
+    $title = $_POST['title'] ?? null;
+    $lesson_id = $_POST['lesson_id'] ?? null;
+    if (!$title || !$lesson_id) json_response(['error' => 'title and lesson_id required'], 400);
+    $description = $_POST['description'] ?? null;
+    $question_text = $_POST['question_text'] ?? null;
+    $input_example = $_POST['input_example'] ?? null;
+
+    $file_path = null;
+    if (!empty($_FILES['file']['tmp_name'])) {
+        $uploadDir = __DIR__ . '/uploads';
+        if (!is_dir($uploadDir)) mkdir($uploadDir);
+        $name = uniqid() . '_' . basename($_FILES['file']['name']);
+        $dest = $uploadDir . '/' . $name;
+        if (move_uploaded_file($_FILES['file']['tmp_name'], $dest)) {
+            $file_path = 'uploads/' . $name;
+        }
+    }
+
+    $stmt = $pdo->prepare('INSERT INTO assignment (lesson_id, title, description, question_text, input_example, file_path, created_at) VALUES (?,?,?,?,?,?,datetime("now"))');
+    $stmt->execute([$lesson_id, $title, $description, $question_text, $input_example, $file_path]);
+    json_response(['message' => 'Assignment created', 'assignment_id' => $pdo->lastInsertId()], 201);
+}
+
+if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'GET') {
+    $stmt = $pdo->prepare('SELECT id, lesson_id, title, description, question_text, input_example, file_path, created_at FROM assignment WHERE id = ?');
+    $stmt->execute([$m[1]]);
+    $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$assignment) json_response(['error' => 'Not found'], 404);
+    json_response($assignment);
+}
+
+if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!$data) json_response(['error' => 'invalid json'], 400);
+    $stmt = $pdo->prepare('UPDATE assignment SET title = COALESCE(?, title), description = COALESCE(?, description), question_text = COALESCE(?, question_text), input_example = COALESCE(?, input_example) WHERE id = ?');
+    $stmt->execute([
+        $data['title'] ?? null,
+        $data['description'] ?? null,
+        $data['question_text'] ?? null,
+        $data['input_example'] ?? null,
+        $id
+    ]);
+    json_response(['message' => 'Assignment updated']);
+}
+
+if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $stmt = $pdo->prepare('DELETE FROM assignment WHERE id = ?');
+    $stmt->execute([$m[1]]);
+    json_response(['message' => 'Assignment deleted']);
+}
+
 if ($path === '/api/testcases' && $method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['problem_id']) || !array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
@@ -104,11 +287,42 @@ if ($path === '/api/testcases' && $method === 'POST') {
     json_response(['message' => 'Test case created', 'testcase_id' => $pdo->lastInsertId()], 201);
 }
 
-if ($path === '/api/submit' && $method === 'POST') {
+if ($path === '/api/testcases' && $method === 'GET') {
+    $problem_id = $_GET['problem_id'] ?? null;
+    if ($problem_id) {
+        $stmt = $pdo->prepare('SELECT id, problem_id, input, expected_output FROM test_case WHERE problem_id = ?');
+        $stmt->execute([$problem_id]);
+    } else {
+        $stmt = $pdo->query('SELECT id, problem_id, input, expected_output FROM test_case');
+    }
+    json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $id = $m[1];
     $data = json_decode(file_get_contents('php://input'), true);
-    if (!isset($data['user_id']) || !isset($data['problem_id']) || !isset($data['code'])) {
+    if (!array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
         json_response(['error' => 'missing fields'], 400);
     }
+    $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ? WHERE id = ?');
+    $stmt->execute([$data['input'], $data['expected_output'], $id]);
+    json_response(['message' => 'Updated']);
+}
+
+if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $id = $m[1];
+    $stmt = $pdo->prepare('DELETE FROM test_case WHERE id = ?');
+    $stmt->execute([$id]);
+    json_response(['message' => 'Deleted']);
+}
+
+if ($path === '/api/submit' && $method === 'POST') {
+    global $current_user;
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['problem_id']) || !isset($data['code'])) {
+        json_response(['error' => 'missing fields'], 400);
+    }
+    $data['user_id'] = $current_user['id'];
     $stmt = $pdo->prepare('SELECT input, expected_output FROM test_case WHERE problem_id = ?');
     $stmt->execute([$data['problem_id']]);
     $cases = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -147,7 +361,11 @@ if ($path === '/api/submit' && $method === 'POST') {
 }
 
 if (preg_match('#^/api/submissions/(\d+)$#', $path, $m) && $method === 'GET') {
+    global $current_user;
     $user_id = $m[1];
+    if ($current_user['id'] != $user_id && empty($current_user['is_admin'])) {
+        json_response(['error' => 'forbidden'], 403);
+    }
     $stmt = $pdo->prepare('SELECT id, problem_id, result, output, submitted_at FROM submission WHERE user_id = ? ORDER BY submitted_at DESC');
     $stmt->execute([$user_id]);
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));

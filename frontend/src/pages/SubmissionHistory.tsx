@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 type Submission = {
   id: number;
@@ -11,9 +12,11 @@ type Submission = {
 const SubmissionHistory: React.FC = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user, authFetch } = useAuth();
 
   useEffect(() => {
-    fetch("http://localhost:5050/api/submissions/1")
+    if (!user) return;
+    authFetch(`http://localhost:5050/api/submissions/${user.id}`)
       .then((res) => res.json())
       .then((data) => {
         setSubmissions(data);
@@ -23,7 +26,7 @@ const SubmissionHistory: React.FC = () => {
         console.error("履歴取得に失敗しました", err);
         setLoading(false);
       });
-  }, []);
+  }, [user]);
 
   return (
     <div style={{ padding: "2rem" }}>

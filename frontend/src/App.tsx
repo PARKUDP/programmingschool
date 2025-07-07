@@ -10,6 +10,9 @@ import AdminLessonList from "./pages/AdminLessonList";
 import AdminRegisterUser from "./pages/AdminRegisterUser";
 import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import AssignmentList from "./pages/AssignmentList";
+import AdminCreateAssignment from "./pages/AdminCreateAssignment";
+import ChangePassword from "./pages/ChangePassword";
 
 function App() {
   return (
@@ -20,7 +23,10 @@ function App() {
         <Route path="/submissions" element={<SubmissionHistory />} />
         <Route path="/dashboard" element={<StudentDashboard />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/assignments" element={<AssignmentList />} />
+        <Route path="/admin/assignments/create" element={<AdminCreateAssignment />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/admin/materials" element={<AdminMaterialList />} />
         <Route path="/admin/materials/:materialId/lessons" element={<AdminLessonList />} />
         <Route path="/admin/problems/create" element={<AdminCreateProblem />} />
