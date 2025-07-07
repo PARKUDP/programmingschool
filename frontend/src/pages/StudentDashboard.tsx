@@ -15,7 +15,7 @@ interface MaterialProgress {
 }
 
 interface ProgressData {
-  total_problems: number;
+  total_assignments: number;
   correct: number;
   incorrect: number;
   unsubmitted: number;

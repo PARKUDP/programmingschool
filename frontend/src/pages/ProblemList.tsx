@@ -3,36 +3,38 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import ReactMarkdown from "react-markdown";
 
-type Problem = {
+type Assignment = {
   id: number;
   lesson_id: number;
   title: string;
-  markdown: string;
-  created_at: string;
+  description: string;
+  question_text: string;
+  input_example: string;
+  file_path: string | null;
 };
 
 const ProblemList: React.FC = () => {
-  const [problems, setProblems] = useState<Problem[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const { authFetch } = useAuth();
 
   useEffect(() => {
-    authFetch("http://localhost:5050/api/problems")
+    authFetch("http://localhost:5050/api/assignments")
       .then((res) => res.json())
-      .then((data) => setProblems(data))
-      .catch((err) => console.error("問題の取得に失敗しました:", err));
+      .then((data) => setAssignments(data))
+      .catch((err) => console.error("宿題の取得に失敗しました:", err));
   }, []);
 
   return (
     <div style={{ padding: "2rem" }}>
-      <h1>Python問題一覧</h1>
+      <h1>宿題一覧</h1>
       <ul>
-        {problems.map((problem) => (
-          <li key={problem.id} style={{ marginBottom: "2rem" }}>
-            <Link to={`/problems/${problem.id}`}>
-              <h2>{problem.title}</h2>
+        {assignments.map((a) => (
+          <li key={a.id} style={{ marginBottom: "2rem" }}>
+            <Link to={`/assignments/${a.id}`}>
+              <h2>{a.title}</h2>
             </Link>
-            <ReactMarkdown>{problem.markdown}</ReactMarkdown>
-            <p>問題ID: {problem.id} / レッスンID: {problem.lesson_id}</p>
+            <p>{a.question_text}</p>
+            <p>宿題ID: {a.id} / レッスンID: {a.lesson_id}</p>
           </li>
         ))}
       </ul>

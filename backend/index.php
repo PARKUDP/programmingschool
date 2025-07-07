@@ -204,20 +204,6 @@ if ($path === '/api/lessons' && $method === 'GET') {
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
 
-if ($path === '/api/problems' && $method === 'GET') {
-    $stmt = $pdo->query('SELECT id, lesson_id, title, markdown, created_at FROM problem');
-    json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
-}
-
-if ($path === '/api/problems' && $method === 'POST') {
-    $data = json_decode(file_get_contents('php://input'), true);
-    if (!isset($data['title']) || !isset($data['markdown']) || !isset($data['lesson_id'])) {
-        json_response(['error' => 'missing fields'], 400);
-    }
-    $stmt = $pdo->prepare('INSERT INTO problem (lesson_id, title, markdown, created_at) VALUES (?,?,?,datetime("now"))');
-    $stmt->execute([$data['lesson_id'], $data['title'], $data['markdown']]);
-    json_response(['message' => 'Problem created', 'problem_id' => $pdo->lastInsertId()], 201);
-}
 
 if ($path === '/api/assignments' && $method === 'GET') {
     $stmt = $pdo->query('SELECT id, lesson_id, title, description, question_text, input_example, file_path, created_at FROM assignment');
@@ -279,7 +265,7 @@ if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'DELETE')
 
 if ($path === '/api/testcases' && $method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    if (!isset($data['problem_id']) || !array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
+    if (!isset($data['assignment_id']) || !array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
         json_response(['error' => 'missing fields'], 400);
     }
     $stmt = $pdo->prepare('INSERT INTO test_case (problem_id, input, expected_output, comment) VALUES (?,?,?,?)');
@@ -289,6 +275,8 @@ if ($path === '/api/testcases' && $method === 'POST') {
         $data['expected_output'],
         $data['comment'] ?? null
     ]);
+    $stmt = $pdo->prepare('INSERT INTO test_case (assignment_id, input, expected_output, comment) VALUES (?,?,?,?)');
+    $stmt->execute([$data['assignment_id'], $data['input'], $data['expected_output'], $data['comment'] ?? null]);
     json_response(['message' => 'Test case created', 'testcase_id' => $pdo->lastInsertId()], 201);
 }
 
@@ -299,6 +287,12 @@ if ($path === '/api/testcases' && $method === 'GET') {
         $stmt->execute([$problem_id]);
     } else {
         $stmt = $pdo->query('SELECT id, problem_id, input, expected_output, comment FROM test_case');
+    $assignment_id = $_GET['assignment_id'] ?? null;
+    if ($assignment_id) {
+        $stmt = $pdo->prepare('SELECT id, assignment_id, input, expected_output, comment FROM test_case WHERE assignment_id = ?');
+        $stmt->execute([$assignment_id]);
+    } else {
+        $stmt = $pdo->query('SELECT id, assignment_id, input, expected_output, comment FROM test_case');
     }
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
@@ -316,6 +310,8 @@ if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'PUT') {
         $data['comment'] ?? null,
         $id
     ]);
+    $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ?, comment = COALESCE(?, comment) WHERE id = ?');
+    $stmt->execute([$data['input'], $data['expected_output'], $data['comment'] ?? null, $id]);
     json_response(['message' => 'Updated']);
 }
 
@@ -329,12 +325,12 @@ if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'DELETE') {
 if ($path === '/api/submit' && $method === 'POST') {
     global $current_user;
     $data = json_decode(file_get_contents('php://input'), true);
-    if (!isset($data['problem_id']) || !isset($data['code'])) {
+    if (!isset($data['assignment_id']) || !isset($data['code'])) {
         json_response(['error' => 'missing fields'], 400);
     }
     $data['user_id'] = $current_user['id'];
-    $stmt = $pdo->prepare('SELECT input, expected_output FROM test_case WHERE problem_id = ?');
-    $stmt->execute([$data['problem_id']]);
+    $stmt = $pdo->prepare('SELECT input, expected_output FROM test_case WHERE assignment_id = ?');
+    $stmt->execute([$data['assignment_id']]);
     $cases = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if (!$cases) json_response(['error' => 'No test cases'], 404);
 
@@ -358,16 +354,16 @@ if ($path === '/api/submit' && $method === 'POST') {
         if (!$all_passed) break;
     }
 
-    $stmt = $pdo->prepare('INSERT INTO submission (user_id, problem_id, code, result, output, submitted_at) VALUES (?,?,?,?,?,datetime("now"))');
+    $stmt = $pdo->prepare('INSERT INTO submission (user_id, assignment_id, code, is_correct, feedback, submitted_at) VALUES (?,?,?,?,?,datetime("now"))');
     $stmt->execute([
         $data['user_id'],
-        $data['problem_id'],
+        $data['assignment_id'],
         $data['code'],
-        $all_passed ? 'AC' : 'WA',
+        $all_passed ? 1 : 0,
         $all_passed ? 'All test cases passed.' : $output
     ]);
 
-    json_response(['message' => 'Submission processed', 'result' => $all_passed ? 'AC' : 'WA', 'output' => $all_passed ? 'All test cases passed.' : $output]);
+    json_response(['message' => 'Submission processed', 'is_correct' => $all_passed ? 1 : 0, 'feedback' => $all_passed ? 'All test cases passed.' : $output]);
 }
 
 if (preg_match('#^/api/submissions/(\d+)$#', $path, $m) && $method === 'GET') {
@@ -376,7 +372,7 @@ if (preg_match('#^/api/submissions/(\d+)$#', $path, $m) && $method === 'GET') {
     if ($current_user['id'] != $user_id && empty($current_user['is_admin'])) {
         json_response(['error' => 'forbidden'], 403);
     }
-    $stmt = $pdo->prepare('SELECT id, problem_id, result, output, submitted_at FROM submission WHERE user_id = ? ORDER BY submitted_at DESC');
+    $stmt = $pdo->prepare('SELECT id, assignment_id, is_correct, feedback, submitted_at FROM submission WHERE user_id = ? ORDER BY submitted_at DESC');
     $stmt->execute([$user_id]);
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
@@ -389,28 +385,28 @@ if ($path === '/api/progress' && $method === 'GET') {
         $totalStmt->execute([$user_id]);
         $totalSub = (int)$totalStmt->fetchColumn();
 
-        $correctStmt = $pdo->prepare("SELECT COUNT(*) FROM submission WHERE user_id = ? AND result = 'AC'");
+        $correctStmt = $pdo->prepare('SELECT COUNT(*) FROM submission WHERE user_id = ? AND is_correct = 1');
         $correctStmt->execute([$user_id]);
         $correct = (int)$correctStmt->fetchColumn();
 
-        $attemptedStmt = $pdo->prepare('SELECT COUNT(DISTINCT problem_id) FROM submission WHERE user_id = ?');
+        $attemptedStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment_id) FROM submission WHERE user_id = ?');
         $attemptedStmt->execute([$user_id]);
         $attempted = (int)$attemptedStmt->fetchColumn();
     } else {
         $totalStmt = $pdo->query('SELECT COUNT(*) FROM submission');
         $totalSub = (int)$totalStmt->fetchColumn();
 
-        $correctStmt = $pdo->query("SELECT COUNT(*) FROM submission WHERE result = 'AC'");
+        $correctStmt = $pdo->query('SELECT COUNT(*) FROM submission WHERE is_correct = 1');
         $correct = (int)$correctStmt->fetchColumn();
 
-        $attemptedStmt = $pdo->query('SELECT COUNT(DISTINCT problem_id) FROM submission');
+        $attemptedStmt = $pdo->query('SELECT COUNT(DISTINCT assignment_id) FROM submission');
         $attempted = (int)$attemptedStmt->fetchColumn();
     }
 
     $incorrect = $totalSub - $correct;
-    $totalProblemStmt = $pdo->query('SELECT COUNT(*) FROM problem');
-    $totalProblems = (int)$totalProblemStmt->fetchColumn();
-    $unsubmitted = $totalProblems - $attempted;
+    $totalStmtAll = $pdo->query('SELECT COUNT(*) FROM assignment');
+    $totalAssignments = (int)$totalStmtAll->fetchColumn();
+    $unsubmitted = $totalAssignments - $attempted;
 
     if ($user_id) {
         $dailyStmt = $pdo->prepare('SELECT substr(submitted_at,1,10) as date, COUNT(*) as count FROM submission WHERE user_id = ? GROUP BY substr(submitted_at,1,10)');
@@ -423,19 +419,19 @@ if ($path === '/api/progress' && $method === 'GET') {
     $materials = [];
     $matStmt = $pdo->query('SELECT id, title FROM material');
     foreach ($matStmt as $m) {
-        $totalP = $pdo->prepare('SELECT COUNT(*) FROM problem JOIN lesson ON problem.lesson_id = lesson.id WHERE lesson.material_id = ?');
+        $totalP = $pdo->prepare('SELECT COUNT(*) FROM assignment JOIN lesson ON assignment.lesson_id = lesson.id WHERE lesson.material_id = ?');
         $totalP->execute([$m['id']]);
         $total = (int)$totalP->fetchColumn();
 
         if ($user_id) {
-            $compStmt = $pdo->prepare('SELECT COUNT(DISTINCT problem.id) FROM problem JOIN lesson ON problem.lesson_id = lesson.id JOIN submission s ON s.problem_id = problem.id WHERE s.user_id = ? AND s.result = "AC" AND lesson.material_id = ?');
+            $compStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment.id) FROM assignment JOIN lesson ON assignment.lesson_id = lesson.id JOIN submission s ON s.assignment_id = assignment.id WHERE s.user_id = ? AND s.is_correct = 1 AND lesson.material_id = ?');
             $compStmt->execute([$user_id, $m['id']]);
         } else {
-            $compStmt = $pdo->prepare('SELECT COUNT(DISTINCT problem.id) FROM problem JOIN lesson ON problem.lesson_id = lesson.id JOIN submission s ON s.problem_id = problem.id WHERE s.result = "AC" AND lesson.material_id = ?');
+            $compStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment.id) FROM assignment JOIN lesson ON assignment.lesson_id = lesson.id JOIN submission s ON s.assignment_id = assignment.id WHERE s.is_correct = 1 AND lesson.material_id = ?');
             $compStmt->execute([$m['id']]);
         }
         $completed = (int)$compStmt->fetchColumn();
-
+        
         $materials[] = [
             'material_id' => (int)$m['id'],
             'title' => $m['title'],
@@ -445,7 +441,7 @@ if ($path === '/api/progress' && $method === 'GET') {
     }
 
     json_response([
-        'total_problems' => $totalProblems,
+        'total_assignments' => $totalAssignments,
         'correct' => $correct,
         'incorrect' => $incorrect,
         'unsubmitted' => $unsubmitted,

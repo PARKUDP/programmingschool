@@ -4,7 +4,6 @@ import ProblemList from "./pages/ProblemList";
 import ProblemDetail from "./pages/ProblemDetail";
 import SubmissionHistory from "./pages/SubmissionHistory";
 import Login from "./pages/Login";
-import AdminCreateProblem from "./pages/AdminCreateProblem";
 import AdminMaterialList from "./pages/AdminMaterialList";
 import AdminLessonList from "./pages/AdminLessonList";
 import AdminRegisterUser from "./pages/AdminRegisterUser";
@@ -19,7 +18,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<ProblemList />} />
-        <Route path="/problems/:id" element={<ProblemDetail />} />
+        <Route path="/assignments/:id" element={<ProblemDetail />} />
         <Route path="/submissions" element={<SubmissionHistory />} />
         <Route path="/dashboard" element={<StudentDashboard />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -29,7 +28,6 @@ function App() {
         <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/admin/materials" element={<AdminMaterialList />} />
         <Route path="/admin/materials/:materialId/lessons" element={<AdminLessonList />} />
-        <Route path="/admin/problems/create" element={<AdminCreateProblem />} />
         <Route path="/admin/users/register" element={<AdminRegisterUser />} />
       </Routes>
     </Router>

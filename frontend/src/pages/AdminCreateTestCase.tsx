@@ -3,22 +3,23 @@ import { useParams } from "react-router-dom";
 
 interface Testcase {
   id: number;
-  problem_id: number;
+  assignment_id: number;
   input: string;
   expected_output: string;
   comment: string;
+  comment?: string;
 }
 
 const AdminCreateTestCase: React.FC = () => {
-  const { problemId } = useParams<{ problemId: string }>();
+  const { assignmentId } = useParams<{ assignmentId: string }>();
   const [testcases, setTestcases] = useState<Testcase[]>([]);
   const [input, setInput] = useState("");
   const [expected, setExpected] = useState("");
   const [comment, setComment] = useState("");
 
   useEffect(() => {
-    if (!problemId) return;
-    fetch(`http://localhost:5050/api/testcases?problem_id=${problemId}`)
+    if (!assignmentId) return;
+    fetch(`http://localhost:5050/api/testcases?assignment_id=${assignmentId}`)
       .then((res) => res.json())
       .then((data) =>
         setTestcases(
@@ -29,14 +30,16 @@ const AdminCreateTestCase: React.FC = () => {
         )
       );
   }, [problemId]);
+      .then((data) => setTestcases(data));
+  }, [assignmentId]);
 
   const handleAdd = () => {
-    if (!problemId) return;
+    if (!assignmentId) return;
     fetch("http://localhost:5050/api/testcases", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        problem_id: Number(problemId),
+        assignment_id: Number(assignmentId),
         input,
         expected_output: expected,
         comment,
@@ -48,7 +51,7 @@ const AdminCreateTestCase: React.FC = () => {
           ...prev,
           {
             id: data.testcase_id,
-            problem_id: Number(problemId),
+            assignment_id: Number(assignmentId),
             input,
             expected_output: expected,
             comment,

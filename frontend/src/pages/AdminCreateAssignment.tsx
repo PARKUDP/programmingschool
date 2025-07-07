@@ -4,7 +4,9 @@ interface Lesson { id: number; title: string; }
 
 const AdminCreateAssignment: React.FC = () => {
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [lessonId, setLessonId] = useState<number | "">("");
+  const params = new URLSearchParams(window.location.search);
+  const initialLesson = params.get("lesson_id");
+  const [lessonId, setLessonId] = useState<number | "">(initialLesson ? Number(initialLesson) : "");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [questionText, setQuestionText] = useState("");
