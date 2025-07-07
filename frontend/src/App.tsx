@@ -4,7 +4,6 @@ import ProblemList from "./pages/ProblemList";
 import ProblemDetail from "./pages/ProblemDetail";
 import SubmissionHistory from "./pages/SubmissionHistory";
 import Login from "./pages/Login";
-import AdminCreateProblem from "./pages/AdminCreateProblem";
 import AdminMaterialList from "./pages/AdminMaterialList";
 import AdminLessonList from "./pages/AdminLessonList";
 import AdminRegisterUser from "./pages/AdminRegisterUser";
@@ -14,13 +13,14 @@ import AssignmentList from "./pages/AssignmentList";
 import AdminCreateAssignment from "./pages/AdminCreateAssignment";
 import ChangePassword from "./pages/ChangePassword";
 import AdminProblemList from "./pages/AdminProblemList";
+import ResetPassword from "./pages/ResetPassword";
 
 function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<ProblemList />} />
-        <Route path="/problems/:id" element={<ProblemDetail />} />
+        <Route path="/assignments/:id" element={<ProblemDetail />} />
         <Route path="/submissions" element={<SubmissionHistory />} />
         <Route path="/dashboard" element={<StudentDashboard />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -28,6 +28,7 @@ function App() {
         <Route path="/admin/assignments/create" element={<AdminCreateAssignment />} />
         <Route path="/login" element={<Login />} />
         <Route path="/change-password" element={<ChangePassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/admin/materials" element={<AdminMaterialList />} />
         <Route path="/admin/materials/:materialId/lessons" element={<AdminLessonList />} />
         <Route path="/admin/lessons/:lessonId/problems" element={<AdminProblemList />} />

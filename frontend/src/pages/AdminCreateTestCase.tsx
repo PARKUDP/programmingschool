@@ -3,33 +3,46 @@ import { useParams } from "react-router-dom";
 
 interface Testcase {
   id: number;
-  problem_id: number;
+  assignment_id: number;
   input: string;
   expected_output: string;
+  comment: string;
+  comment?: string;
 }
 
 const AdminCreateTestCase: React.FC = () => {
-  const { problemId } = useParams<{ problemId: string }>();
+  const { assignmentId } = useParams<{ assignmentId: string }>();
   const [testcases, setTestcases] = useState<Testcase[]>([]);
   const [input, setInput] = useState("");
   const [expected, setExpected] = useState("");
+  const [comment, setComment] = useState("");
 
   useEffect(() => {
-    if (!problemId) return;
-    fetch(`http://localhost:5050/api/testcases?problem_id=${problemId}`)
+    if (!assignmentId) return;
+    fetch(`http://localhost:5050/api/testcases?assignment_id=${assignmentId}`)
       .then((res) => res.json())
-      .then((data) => setTestcases(data));
+      .then((data) =>
+        setTestcases(
+          data.map((tc: any) => ({
+            ...tc,
+            comment: tc.comment ?? "",
+          }))
+        )
+      );
   }, [problemId]);
+      .then((data) => setTestcases(data));
+  }, [assignmentId]);
 
   const handleAdd = () => {
-    if (!problemId) return;
+    if (!assignmentId) return;
     fetch("http://localhost:5050/api/testcases", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        problem_id: Number(problemId),
+        assignment_id: Number(assignmentId),
         input,
         expected_output: expected,
+        comment,
       }),
     })
       .then((res) => res.json())
@@ -38,13 +51,15 @@ const AdminCreateTestCase: React.FC = () => {
           ...prev,
           {
             id: data.testcase_id,
-            problem_id: Number(problemId),
+            assignment_id: Number(assignmentId),
             input,
             expected_output: expected,
+            comment,
           },
         ]);
         setInput("");
         setExpected("");
+        setComment("");
       });
   };
 
@@ -52,7 +67,11 @@ const AdminCreateTestCase: React.FC = () => {
     fetch(`http://localhost:5050/api/testcases/${tc.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input: tc.input, expected_output: tc.expected_output }),
+      body: JSON.stringify({
+        input: tc.input,
+        expected_output: tc.expected_output,
+        comment: tc.comment,
+      }),
     }).then(() => {
       setTestcases((prev) =>
         prev.map((t) => (t.id === tc.id ? tc : t))
@@ -70,7 +89,7 @@ const AdminCreateTestCase: React.FC = () => {
 
   const updateField = (
     id: number,
-    field: "input" | "expected_output",
+    field: "input" | "expected_output" | "comment",
     value: string
   ) => {
     setTestcases((prev) =>
@@ -95,6 +114,12 @@ const AdminCreateTestCase: React.FC = () => {
           onChange={(e) => setExpected(e.target.value)}
         />
         <br />
+        <textarea
+          placeholder="コメント"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+        />
+        <br />
         <button onClick={handleAdd}>追加</button>
       </div>
 
@@ -112,6 +137,12 @@ const AdminCreateTestCase: React.FC = () => {
               onChange={(e) =>
                 updateField(tc.id, "expected_output", e.target.value)
               }
+            />
+            <br />
+            <textarea
+              value={tc.comment}
+              onChange={(e) => updateField(tc.id, "comment", e.target.value)}
+              placeholder="コメント"
             />
             <br />
             <button onClick={() => handleUpdate(tc)}>更新</button>

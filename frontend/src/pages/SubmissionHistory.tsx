@@ -3,9 +3,9 @@ import { useAuth } from "../context/AuthContext";
 
 type Submission = {
   id: number;
-  problem_id: number;
-  result: string;
-  output: string;
+  assignment_id: number;
+  is_correct: number;
+  feedback: string;
   submitted_at: string;
 };
 
@@ -40,12 +40,12 @@ const SubmissionHistory: React.FC = () => {
           {submissions.map((s) => (
             <li key={s.id} style={{ marginBottom: "1.5rem" }}>
               <p><strong>提出ID:</strong> {s.id}</p>
-              <p><strong>問題ID:</strong> {s.problem_id}</p>
-              <p><strong>結果:</strong> {s.result}</p>
+              <p><strong>宿題ID:</strong> {s.assignment_id}</p>
+              <p><strong>結果:</strong> {s.is_correct ? "AC" : "WA"}</p>
               <p><strong>提出時刻:</strong> {new Date(s.submitted_at).toLocaleString()}</p>
               <details>
                 <summary>出力を表示</summary>
-                <pre>{s.output}</pre>
+                <pre>{s.feedback}</pre>
               </details>
               <hr />
             </li>

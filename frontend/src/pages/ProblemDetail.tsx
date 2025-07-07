@@ -1,31 +1,29 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import ReactMarkdown from "react-markdown";
 import CodeEditor from "../components/CodeEditor";
 
-type Problem = {
+type Assignment = {
   id: number;
   lesson_id: number;
   title: string;
-  markdown: string;
-  created_at: string;
+  description: string;
+  question_text: string;
+  input_example: string;
+  file_path: string | null;
 };
 
 const ProblemDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { authFetch } = useAuth();
-  const [problem, setProblem] = useState<Problem | null>(null);
+  const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [code, setCode] = useState<string>("# Pythonのコードをここに書いてください");
   const [result, setResult] = useState<string>("");
 
   useEffect(() => {
-    authFetch("http://localhost:5050/api/problems")
+    authFetch(`http://localhost:5050/api/assignments/${id}`)
       .then((res) => res.json())
-      .then((data) => {
-        const found = data.find((p: Problem) => p.id === Number(id));
-        setProblem(found);
-      });
+      .then((data) => setAssignment(data));
   }, [id]);
 
   const handleSubmit = () => {
@@ -33,22 +31,22 @@ const ProblemDetail: React.FC = () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        problem_id: Number(id),
+        assignment_id: Number(id),
         code: code,
       }),
     })
       .then((res) => res.json())
       .then((data) => {
-        setResult(`結果: ${data.result}\n出力: ${data.output}`);
+        setResult(`結果: ${data.is_correct ? "AC" : "WA"}\n${data.feedback}`);
       });
   };
 
-  if (!problem) return <p>読み込み中...</p>;
+  if (!assignment) return <p>読み込み中...</p>;
 
   return (
     <div style={{ padding: "2rem" }}>
-      <h1>{problem.title}</h1>
-      <ReactMarkdown>{problem.markdown}</ReactMarkdown>
+      <h1>{assignment.title}</h1>
+      <p>{assignment.question_text}</p>
 
       <CodeEditor value={code} onChange={setCode} />
 
