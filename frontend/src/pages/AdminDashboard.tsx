@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
+import { useAuth } from "../context/AuthContext";
 
 interface DailyCount {
   date: string;
@@ -22,13 +23,35 @@ interface ProgressData {
   material_progress: MaterialProgress[];
 }
 
+interface UserProgress {
+  user_id: number;
+  username: string;
+  submissions: number;
+  correct: number;
+  accuracy: number;
+}
+
+interface UnsubmittedUser {
+  id: number;
+  username: string;
+}
+
 const AdminDashboard: React.FC = () => {
+  const { authFetch } = useAuth();
   const [data, setData] = useState<ProgressData | null>(null);
+  const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
+  const [unsubmittedUsers, setUnsubmittedUsers] = useState<UnsubmittedUser[]>([]);
 
   useEffect(() => {
-    fetch("http://localhost:5050/api/progress")
+    authFetch("http://localhost:5050/api/progress")
       .then((res) => res.json())
       .then((d) => setData(d));
+    authFetch("http://localhost:5050/api/user_progress")
+      .then((res) => res.json())
+      .then((d) => setUserProgress(d));
+    authFetch("http://localhost:5050/api/unsubmitted")
+      .then((res) => res.json())
+      .then((d) => setUnsubmittedUsers(d));
   }, []);
 
   if (!data) return <p>読み込み中...</p>;
@@ -84,6 +107,46 @@ const AdminDashboard: React.FC = () => {
           </li>
         ))}
       </ul>
+
+      <h2>成績一覧</h2>
+      <table border="1" cellPadding="4" style={{ borderCollapse: "collapse", marginBottom: "1rem" }}>
+        <thead>
+          <tr>
+            <th>ユーザー名</th>
+            <th>提出数</th>
+            <th>正解数</th>
+            <th>正解率(%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {userProgress.map((u) => (
+            <tr key={u.user_id}>
+              <td>{u.username}</td>
+              <td>{u.submissions}</td>
+              <td>{u.correct}</td>
+              <td>{u.accuracy}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h2>未提出者一覧</h2>
+      <table border="1" cellPadding="4" style={{ borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th>ユーザーID</th>
+            <th>ユーザー名</th>
+          </tr>
+        </thead>
+        <tbody>
+          {unsubmittedUsers.map((u) => (
+            <tr key={u.id}>
+              <td>{u.id}</td>
+              <td>{u.username}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
