@@ -7,7 +7,6 @@ interface Testcase {
   input: string;
   expected_output: string;
   comment: string;
-  comment?: string;
 }
 
 const AdminCreateTestCase: React.FC = () => {
@@ -29,8 +28,6 @@ const AdminCreateTestCase: React.FC = () => {
           }))
         )
       );
-  }, [problemId]);
-      .then((data) => setTestcases(data));
   }, [assignmentId]);
 
   const handleAdd = () => {

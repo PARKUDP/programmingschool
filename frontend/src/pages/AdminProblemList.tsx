@@ -24,7 +24,9 @@ const AdminProblemList: React.FC = () => {
   }, [lessonId]);
 
   const refresh = () => {
-    fetch(`http://localhost:5050/api/problems/by_lesson?lesson_id=${lessonId}`)
+    authFetch(
+      `http://localhost:5050/api/problems/by_lesson?lesson_id=${lessonId}`
+    )
       .then((res) => res.json())
       .then((data) => setProblems(data));
   };
@@ -33,7 +35,7 @@ const AdminProblemList: React.FC = () => {
     const title = prompt("新しいタイトル", p.title);
     if (title === null) return;
     const markdown = prompt("問題文", p.markdown ?? "") ?? p.markdown;
-    fetch(`http://localhost:5050/api/problems/${p.id}`, {
+    authFetch(`http://localhost:5050/api/problems/${p.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -46,7 +48,7 @@ const AdminProblemList: React.FC = () => {
 
   const handleDelete = (id: number) => {
     if (!window.confirm("削除しますか？")) return;
-    fetch(`http://localhost:5050/api/problems/${id}`, { method: "DELETE" }).then(
+    authFetch(`http://localhost:5050/api/problems/${id}`, { method: "DELETE" }).then(
       refresh
     );
   };
