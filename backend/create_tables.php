@@ -23,15 +23,6 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS lesson (
     FOREIGN KEY(material_id) REFERENCES material(id) ON DELETE CASCADE
 );");
 
-$pdo->exec("CREATE TABLE IF NOT EXISTS problem (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lesson_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    markdown TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(lesson_id) REFERENCES lesson(id) ON DELETE CASCADE
-);");
-
 $pdo->exec("CREATE TABLE IF NOT EXISTS assignment (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     lesson_id INTEGER NOT NULL,
@@ -46,22 +37,23 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS assignment (
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS test_case (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    problem_id INTEGER NOT NULL,
+    assignment_id INTEGER NOT NULL,
     input TEXT,
     expected_output TEXT,
-    FOREIGN KEY(problem_id) REFERENCES problem(id) ON DELETE CASCADE
+    comment TEXT,
+    FOREIGN KEY(assignment_id) REFERENCES assignment(id) ON DELETE CASCADE
 );");
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS submission (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    problem_id INTEGER NOT NULL,
+    assignment_id INTEGER NOT NULL,
     code TEXT,
-    result TEXT,
-    output TEXT,
+    is_correct INTEGER,
+    feedback TEXT,
     submitted_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE,
-    FOREIGN KEY(problem_id) REFERENCES problem(id) ON DELETE CASCADE
+    FOREIGN KEY(assignment_id) REFERENCES assignment(id) ON DELETE CASCADE
 );");
 
 $adminHash = password_hash('admin', PASSWORD_DEFAULT);
