@@ -8,7 +8,9 @@ import AdminCreateProblem from "./pages/AdminCreateProblem";
 import AdminMaterialList from "./pages/AdminMaterialList";
 import AdminLessonList from "./pages/AdminLessonList";
 import AdminRegisterUser from "./pages/AdminRegisterUser";
-import AdminCreateTestCase from "./pages/AdminCreateTestCase";
+import AssignmentList from "./pages/AssignmentList";
+import AdminCreateAssignment from "./pages/AdminCreateAssignment";
+import ChangePassword from "./pages/ChangePassword";
 
 function App() {
   return (
@@ -17,12 +19,14 @@ function App() {
         <Route path="/" element={<ProblemList />} />
         <Route path="/problems/:id" element={<ProblemDetail />} />
         <Route path="/submissions" element={<SubmissionHistory />} />
+        <Route path="/assignments" element={<AssignmentList />} />
+        <Route path="/admin/assignments/create" element={<AdminCreateAssignment />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/admin/materials" element={<AdminMaterialList />} />
         <Route path="/admin/materials/:materialId/lessons" element={<AdminLessonList />} />
         <Route path="/admin/problems/create" element={<AdminCreateProblem />} />
         <Route path="/admin/users/register" element={<AdminRegisterUser />} />
-        <Route path="/admin/problems/:problemId/testcases" element={<AdminCreateTestCase />} />
       </Routes>
     </Router>
   );
