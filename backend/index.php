@@ -369,7 +369,9 @@ if ($path === '/api/submit' && $method === 'POST') {
     foreach ($cases as $case) {
         $tmp = tempnam(sys_get_temp_dir(), 'code');
         file_put_contents($tmp, $data['code']);
-        $cmd = 'python3 ' . escapeshellarg($tmp);
+        // Use isolated Python execution with a timeout to mitigate security risks
+        $safe_python = '/usr/bin/python3';
+        $cmd = 'timeout 5s ' . escapeshellcmd($safe_python) . ' -I -S ' . escapeshellarg($tmp);
         $result = [];
         $ret = null;
         $input = $case['input'];
