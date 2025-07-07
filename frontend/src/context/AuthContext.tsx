@@ -8,8 +8,10 @@ type AuthUser = {
 
 type AuthContextType = {
   user: AuthUser | null;
-  login: (user: AuthUser) => void;
+  token: string | null;
+  login: (user: AuthUser, token: string) => void;
   logout: () => void;
+  authFetch: (input: RequestInfo, init?: RequestInit) => Promise<Response>;
   changePassword: (oldPass: string, newPass: string) => Promise<void>;
 };
 
@@ -21,14 +23,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return stored ? JSON.parse(stored) : null;
   });
 
-  const login = (user: AuthUser) => {
+  const [token, setToken] = useState<string | null>(() => {
+    return localStorage.getItem("authToken");
+  });
+
+  const login = (user: AuthUser, token: string) => {
     setUser(user);
+    setToken(token);
     localStorage.setItem("authUser", JSON.stringify(user));
+    localStorage.setItem("authToken", token);
   };
 
   const logout = () => {
     setUser(null);
+    setToken(null);
     localStorage.removeItem("authUser");
+    localStorage.removeItem("authToken");
+  };
+
+  const authFetch = (input: RequestInfo, init: RequestInit = {}) => {
+    const headers = { ...(init.headers || {}) } as Record<string, string>;
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return fetch(input, { ...init, headers });
   };
 
   const changePassword = async (oldPass: string, newPass: string) => {
@@ -49,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, changePassword }}>
+    <AuthContext.Provider value={{ user, token, login, logout, authFetch, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

@@ -21,11 +21,14 @@ const Login: React.FC = () => {
         return res.json();
       })
       .then((data) => {
-        login({
-          id: data.user_id,
-          username: username,
-          is_admin: data.is_admin || false, 
-        });
+        login(
+          {
+            id: data.user_id,
+            username: username,
+            is_admin: data.is_admin || false,
+          },
+          data.token
+        );
         navigate("/"); // ログイン成功後にホームへリダイレクト
       })
       .catch(() => {

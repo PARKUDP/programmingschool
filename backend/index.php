@@ -6,6 +6,60 @@ header('Content-Type: application/json');
 $method = $_SERVER['REQUEST_METHOD'];
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
+// Simple JWT utilities
+$secret = getenv('JWT_SECRET') ?: 'secretkey';
+$current_user = null;
+
+function base64url_encode(string $data): string {
+    return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+}
+
+function base64url_decode(string $data): string {
+    return base64_decode(strtr($data, '-_', '+/'));
+}
+
+function generate_jwt(array $payload, string $secret, int $exp = 3600): string {
+    $header = ['alg' => 'HS256', 'typ' => 'JWT'];
+    $payload['exp'] = time() + $exp;
+    $segments = [
+        base64url_encode(json_encode($header)),
+        base64url_encode(json_encode($payload))
+    ];
+    $signature = hash_hmac('sha256', implode('.', $segments), $secret, true);
+    $segments[] = base64url_encode($signature);
+    return implode('.', $segments);
+}
+
+function verify_jwt(string $token, string $secret) {
+    $parts = explode('.', $token);
+    if (count($parts) !== 3) return false;
+    list($h64, $p64, $s64) = $parts;
+    $payload = json_decode(base64url_decode($p64), true);
+    if (!$payload || ($payload['exp'] ?? 0) < time()) return false;
+    $sig = base64url_decode($s64);
+    $valid = hash_hmac('sha256', "$h64.$p64", $secret, true);
+    if (!hash_equals($valid, $sig)) return false;
+    return $payload;
+}
+
+function require_auth() {
+    global $secret, $current_user;
+    $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (preg_match('/Bearer\s+(.*)/', $auth, $m)) {
+        $payload = verify_jwt($m[1], $secret);
+        if ($payload) {
+            $current_user = $payload;
+            return;
+        }
+    }
+    json_response(['error' => 'Unauthorized'], 401);
+}
+
+$public_paths = ['/api/login', '/api/register'];
+if (!in_array($path, $public_paths)) {
+    require_auth();
+}
+
 function json_response($data, $status = 200) {
     http_response_code($status);
     echo json_encode($data);
@@ -40,7 +94,13 @@ if ($path === '/api/login' && $method === 'POST') {
     if (!$user || !password_verify($data['password'], $user['password_hash'])) {
         json_response(['error' => 'invalid credentials'], 401);
     }
-    json_response(['message' => 'Logged in', 'user_id' => $user['id'], 'is_admin' => (int)$user['is_admin']]);
+    $token = generate_jwt(['id' => $user['id'], 'username' => $data['username'], 'is_admin' => (int)$user['is_admin']], $secret);
+    json_response([
+        'message' => 'Logged in',
+        'token' => $token,
+        'user_id' => $user['id'],
+        'is_admin' => (int)$user['is_admin']
+    ]);
 }
 
 if ($path === '/api/change_password' && $method === 'POST') {
@@ -257,10 +317,12 @@ if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'DELETE') {
 }
 
 if ($path === '/api/submit' && $method === 'POST') {
+    global $current_user;
     $data = json_decode(file_get_contents('php://input'), true);
-    if (!isset($data['user_id']) || !isset($data['problem_id']) || !isset($data['code'])) {
+    if (!isset($data['problem_id']) || !isset($data['code'])) {
         json_response(['error' => 'missing fields'], 400);
     }
+    $data['user_id'] = $current_user['id'];
     $stmt = $pdo->prepare('SELECT input, expected_output FROM test_case WHERE problem_id = ?');
     $stmt->execute([$data['problem_id']]);
     $cases = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -299,7 +361,11 @@ if ($path === '/api/submit' && $method === 'POST') {
 }
 
 if (preg_match('#^/api/submissions/(\d+)$#', $path, $m) && $method === 'GET') {
+    global $current_user;
     $user_id = $m[1];
+    if ($current_user['id'] != $user_id && empty($current_user['is_admin'])) {
+        json_response(['error' => 'forbidden'], 403);
+    }
     $stmt = $pdo->prepare('SELECT id, problem_id, result, output, submitted_at FROM submission WHERE user_id = ? ORDER BY submitted_at DESC');
     $stmt->execute([$user_id]);
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
