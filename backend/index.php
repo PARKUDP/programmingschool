@@ -55,6 +55,13 @@ function require_auth() {
     json_response(['error' => 'Unauthorized'], 401);
 }
 
+function require_admin() {
+    global $current_user;
+    if (empty($current_user['is_admin'])) {
+        json_response(['error' => 'forbidden'], 403);
+    }
+}
+
 $public_paths = ['/api/login', '/api/register'];
 if (!in_array($path, $public_paths)) {
     require_auth();
@@ -137,6 +144,7 @@ if ($path === '/api/materials' && $method === 'GET') {
 }
 
 if ($path === '/api/materials' && $method === 'POST') {
+    require_admin();
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
     $stmt = $pdo->prepare('INSERT INTO material (title) VALUES (?)');
@@ -145,6 +153,7 @@ if ($path === '/api/materials' && $method === 'POST') {
 }
 
 if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'PUT') {
+    require_admin();
     $material_id = $m[1];
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
@@ -154,6 +163,7 @@ if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'PUT') {
 }
 
 if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    require_admin();
     $material_id = $m[1];
     $stmt = $pdo->prepare('DELETE FROM material WHERE id = ?');
     $stmt->execute([$material_id]);
@@ -161,6 +171,7 @@ if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'DELETE') {
 }
 
 if ($path === '/api/lessons' && $method === 'POST') {
+    require_admin();
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['material_id']) || !isset($data['title'])) {
         json_response(['error' => 'material_id and title required'], 400);
@@ -171,6 +182,7 @@ if ($path === '/api/lessons' && $method === 'POST') {
 }
 
 if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'PUT') {
+    require_admin();
     $lesson_id = $m[1];
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
@@ -185,6 +197,7 @@ if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'PUT') {
 }
 
 if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    require_admin();
     $lesson_id = $m[1];
     $stmt = $pdo->prepare('DELETE FROM lesson WHERE id = ?');
     $stmt->execute([$lesson_id]);
@@ -204,6 +217,26 @@ if ($path === '/api/lessons' && $method === 'GET') {
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
 
+if ($path === '/api/problems' && $method === 'GET') {
+    $stmt = $pdo->query('SELECT id, lesson_id, title, markdown, created_at FROM problem');
+    json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+if ($path === '/api/problems' && $method === 'POST') {
+    require_admin();
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['lesson_id']) || !isset($data['title'])) {
+        json_response(['error' => 'lesson_id and title required'], 400);
+    }
+    $stmt = $pdo->prepare('INSERT INTO problem (lesson_id, title, markdown, created_at) VALUES (?,?,?,datetime("now"))');
+    $stmt->execute([
+        $data['lesson_id'],
+        $data['title'],
+        $data['markdown'] ?? null
+    ]);
+    json_response(['message' => 'Problem created', 'problem_id' => $pdo->lastInsertId()], 201);
+}
+
 
 if ($path === '/api/problems/by_lesson' && $method === 'GET') {
     $lesson_id = $_GET['lesson_id'] ?? null;
@@ -214,6 +247,7 @@ if ($path === '/api/problems/by_lesson' && $method === 'GET') {
 }
 
 if (preg_match('#^/api/problems/(\d+)$#', $path, $m) && $method === 'PUT') {
+    require_admin();
     $id = $m[1];
     $data = json_decode(file_get_contents('php://input'), true);
     if (!$data) json_response(['error' => 'invalid json'], 400);
@@ -228,6 +262,7 @@ if (preg_match('#^/api/problems/(\d+)$#', $path, $m) && $method === 'PUT') {
 }
 
 if (preg_match('#^/api/problems/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    require_admin();
     $id = $m[1];
     $stmt = $pdo->prepare('DELETE FROM problem WHERE id = ?');
     $stmt->execute([$id]);
@@ -240,6 +275,7 @@ if ($path === '/api/assignments' && $method === 'GET') {
 }
 
 if ($path === '/api/assignments' && $method === 'POST') {
+    require_admin();
     $title = $_POST['title'] ?? null;
     $lesson_id = $_POST['lesson_id'] ?? null;
     if (!$title || !$lesson_id) json_response(['error' => 'title and lesson_id required'], 400);
@@ -272,6 +308,7 @@ if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'GET') {
 }
 
 if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'PUT') {
+    require_admin();
     $id = $m[1];
     $data = json_decode(file_get_contents('php://input'), true);
     if (!$data) json_response(['error' => 'invalid json'], 400);
@@ -287,35 +324,29 @@ if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'PUT') {
 }
 
 if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    require_admin();
     $stmt = $pdo->prepare('DELETE FROM assignment WHERE id = ?');
     $stmt->execute([$m[1]]);
     json_response(['message' => 'Assignment deleted']);
 }
 
 if ($path === '/api/testcases' && $method === 'POST') {
+    require_admin();
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['assignment_id']) || !array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
         json_response(['error' => 'missing fields'], 400);
     }
-    $stmt = $pdo->prepare('INSERT INTO test_case (problem_id, input, expected_output, comment) VALUES (?,?,?,?)');
+    $stmt = $pdo->prepare('INSERT INTO test_case (assignment_id, input, expected_output, comment) VALUES (?,?,?,?)');
     $stmt->execute([
-        $data['problem_id'],
+        $data['assignment_id'],
         $data['input'],
         $data['expected_output'],
         $data['comment'] ?? null
     ]);
-    $stmt = $pdo->prepare('INSERT INTO test_case (assignment_id, input, expected_output, comment) VALUES (?,?,?,?)');
-    $stmt->execute([$data['assignment_id'], $data['input'], $data['expected_output'], $data['comment'] ?? null]);
     json_response(['message' => 'Test case created', 'testcase_id' => $pdo->lastInsertId()], 201);
 }
 
 if ($path === '/api/testcases' && $method === 'GET') {
-    $problem_id = $_GET['problem_id'] ?? null;
-    if ($problem_id) {
-        $stmt = $pdo->prepare('SELECT id, problem_id, input, expected_output, comment FROM test_case WHERE problem_id = ?');
-        $stmt->execute([$problem_id]);
-    } else {
-        $stmt = $pdo->query('SELECT id, problem_id, input, expected_output, comment FROM test_case');
     $assignment_id = $_GET['assignment_id'] ?? null;
     if ($assignment_id) {
         $stmt = $pdo->prepare('SELECT id, assignment_id, input, expected_output, comment FROM test_case WHERE assignment_id = ?');
@@ -327,24 +358,24 @@ if ($path === '/api/testcases' && $method === 'GET') {
 }
 
 if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'PUT') {
+    require_admin();
     $id = $m[1];
     $data = json_decode(file_get_contents('php://input'), true);
     if (!array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
         json_response(['error' => 'missing fields'], 400);
     }
-    $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ?, comment = ? WHERE id = ?');
+    $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ?, comment = COALESCE(?, comment) WHERE id = ?');
     $stmt->execute([
         $data['input'],
         $data['expected_output'],
         $data['comment'] ?? null,
         $id
     ]);
-    $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ?, comment = COALESCE(?, comment) WHERE id = ?');
-    $stmt->execute([$data['input'], $data['expected_output'], $data['comment'] ?? null, $id]);
     json_response(['message' => 'Updated']);
 }
 
 if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    require_admin();
     $id = $m[1];
     $stmt = $pdo->prepare('DELETE FROM test_case WHERE id = ?');
     $stmt->execute([$id]);
@@ -482,7 +513,7 @@ if ($path === '/api/progress' && $method === 'GET') {
 }
 
 if ($path === '/api/user_progress' && $method === 'GET') {
-    $stmt = $pdo->query("SELECT u.id, u.username, COUNT(s.id) AS submissions, SUM(CASE WHEN s.result = 'AC' THEN 1 ELSE 0 END) AS correct FROM user u LEFT JOIN submission s ON u.id = s.user_id GROUP BY u.id, u.username");
+    $stmt = $pdo->query("SELECT u.id, u.username, COUNT(s.id) AS submissions, SUM(CASE WHEN s.is_correct = 1 THEN 1 ELSE 0 END) AS correct FROM user u LEFT JOIN submission s ON u.id = s.user_id GROUP BY u.id, u.username");
     $res = [];
     foreach ($stmt as $row) {
         $sub = (int)$row['submissions'];

@@ -23,6 +23,15 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS lesson (
     FOREIGN KEY(material_id) REFERENCES material(id) ON DELETE CASCADE
 );");
 
+$pdo->exec("CREATE TABLE IF NOT EXISTS problem (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lesson_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    markdown TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(lesson_id) REFERENCES lesson(id) ON DELETE CASCADE
+);");
+
 $pdo->exec("CREATE TABLE IF NOT EXISTS assignment (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     lesson_id INTEGER NOT NULL,
