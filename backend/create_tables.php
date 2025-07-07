@@ -44,6 +44,19 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS test_case (
     FOREIGN KEY(assignment_id) REFERENCES assignment(id) ON DELETE CASCADE
 );");
 
+// マイグレーション：既存DBに comment カラムを追加
+$cols = $pdo->query('PRAGMA table_info(test_case)')->fetchAll(PDO::FETCH_ASSOC);
+$hasComment = false;
+foreach ($cols as $c) {
+    if ($c['name'] === 'comment') {
+        $hasComment = true;
+        break;
+    }
+}
+if (!$hasComment) {
+    $pdo->exec('ALTER TABLE test_case ADD COLUMN comment TEXT');
+}
+
 $pdo->exec("CREATE TABLE IF NOT EXISTS submission (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -56,6 +69,7 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS submission (
     FOREIGN KEY(assignment_id) REFERENCES assignment(id) ON DELETE CASCADE
 );");
 
+// 管理者ユーザー追加（初期値 admin）
 $adminHash = password_hash('admin', PASSWORD_DEFAULT);
 $stmt = $pdo->prepare("INSERT OR IGNORE INTO user (username, password_hash, is_admin) VALUES ('admin', ?, 1)");
 $stmt->execute([$adminHash]);

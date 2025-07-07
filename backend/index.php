@@ -268,12 +268,25 @@ if ($path === '/api/testcases' && $method === 'POST') {
     if (!isset($data['assignment_id']) || !array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
         json_response(['error' => 'missing fields'], 400);
     }
+    $stmt = $pdo->prepare('INSERT INTO test_case (problem_id, input, expected_output, comment) VALUES (?,?,?,?)');
+    $stmt->execute([
+        $data['problem_id'],
+        $data['input'],
+        $data['expected_output'],
+        $data['comment'] ?? null
+    ]);
     $stmt = $pdo->prepare('INSERT INTO test_case (assignment_id, input, expected_output, comment) VALUES (?,?,?,?)');
     $stmt->execute([$data['assignment_id'], $data['input'], $data['expected_output'], $data['comment'] ?? null]);
     json_response(['message' => 'Test case created', 'testcase_id' => $pdo->lastInsertId()], 201);
 }
 
 if ($path === '/api/testcases' && $method === 'GET') {
+    $problem_id = $_GET['problem_id'] ?? null;
+    if ($problem_id) {
+        $stmt = $pdo->prepare('SELECT id, problem_id, input, expected_output, comment FROM test_case WHERE problem_id = ?');
+        $stmt->execute([$problem_id]);
+    } else {
+        $stmt = $pdo->query('SELECT id, problem_id, input, expected_output, comment FROM test_case');
     $assignment_id = $_GET['assignment_id'] ?? null;
     if ($assignment_id) {
         $stmt = $pdo->prepare('SELECT id, assignment_id, input, expected_output, comment FROM test_case WHERE assignment_id = ?');
@@ -290,6 +303,13 @@ if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'PUT') {
     if (!array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
         json_response(['error' => 'missing fields'], 400);
     }
+    $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ?, comment = ? WHERE id = ?');
+    $stmt->execute([
+        $data['input'],
+        $data['expected_output'],
+        $data['comment'] ?? null,
+        $id
+    ]);
     $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ?, comment = COALESCE(?, comment) WHERE id = ?');
     $stmt->execute([$data['input'], $data['expected_output'], $data['comment'] ?? null, $id]);
     json_response(['message' => 'Updated']);
