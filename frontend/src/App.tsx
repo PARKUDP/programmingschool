@@ -12,6 +12,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AssignmentList from "./pages/AssignmentList";
 import AdminCreateAssignment from "./pages/AdminCreateAssignment";
 import ChangePassword from "./pages/ChangePassword";
+import AdminProblemList from "./pages/AdminProblemList";
 import ResetPassword from "./pages/ResetPassword";
 
 function App() {
@@ -30,6 +31,8 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/admin/materials" element={<AdminMaterialList />} />
         <Route path="/admin/materials/:materialId/lessons" element={<AdminLessonList />} />
+        <Route path="/admin/lessons/:lessonId/problems" element={<AdminProblemList />} />
+        <Route path="/admin/problems/create" element={<AdminCreateProblem />} />
         <Route path="/admin/users/register" element={<AdminRegisterUser />} />
       </Routes>
     </Router>

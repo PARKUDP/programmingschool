@@ -205,6 +205,35 @@ if ($path === '/api/lessons' && $method === 'GET') {
 }
 
 
+if ($path === '/api/problems/by_lesson' && $method === 'GET') {
+    $lesson_id = $_GET['lesson_id'] ?? null;
+    if (!$lesson_id) json_response(['error' => 'lesson_id required'], 400);
+    $stmt = $pdo->prepare('SELECT id, lesson_id, title, markdown, created_at FROM problem WHERE lesson_id = ?');
+    $stmt->execute([$lesson_id]);
+    json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+if (preg_match('#^/api/problems/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!$data) json_response(['error' => 'invalid json'], 400);
+    $stmt = $pdo->prepare('UPDATE problem SET lesson_id = COALESCE(?, lesson_id), title = COALESCE(?, title), markdown = COALESCE(?, markdown) WHERE id = ?');
+    $stmt->execute([
+        $data['lesson_id'] ?? null,
+        $data['title'] ?? null,
+        $data['markdown'] ?? null,
+        $id
+    ]);
+    json_response(['message' => 'Problem updated']);
+}
+
+if (preg_match('#^/api/problems/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $id = $m[1];
+    $stmt = $pdo->prepare('DELETE FROM problem WHERE id = ?');
+    $stmt->execute([$id]);
+    json_response(['message' => 'Problem deleted']);
+}
+
 if ($path === '/api/assignments' && $method === 'GET') {
     $stmt = $pdo->query('SELECT id, lesson_id, title, description, question_text, input_example, file_path, created_at FROM assignment');
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
