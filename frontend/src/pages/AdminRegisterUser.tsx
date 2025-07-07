@@ -6,7 +6,10 @@ const AdminRegisterUser: React.FC = () => {
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [message, setMessage] = useState("");
-  const { authFetch } = useAuth();
+  const { user, authFetch } = useAuth();
+
+  if (!user) return <p>ログインしてください</p>;
+  if (!user.is_admin) return <p>権限がありません</p>;
 
   const handleRegister = () => {
     authFetch("http://localhost:5050/api/register", {

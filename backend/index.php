@@ -62,7 +62,7 @@ function require_admin() {
     }
 }
 
-$public_paths = ['/api/login', '/api/register'];
+$public_paths = ['/api/login'];
 if (!in_array($path, $public_paths)) {
     require_auth();
 }
@@ -74,6 +74,8 @@ function json_response($data, $status = 200) {
 }
 
 if ($path === '/api/register' && $method === 'POST') {
+    require_auth();
+    require_admin();
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['username']) || !isset($data['password'])) {
         json_response(['error' => 'username and password required'], 400);
