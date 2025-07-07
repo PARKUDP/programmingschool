@@ -10,6 +10,7 @@ type AuthContextType = {
   user: AuthUser | null;
   login: (user: AuthUser) => void;
   logout: () => void;
+  changePassword: (oldPass: string, newPass: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,8 +31,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("authUser");
   };
 
+  const changePassword = async (oldPass: string, newPass: string) => {
+    if (!user) throw new Error("not logged in");
+    const res = await fetch("http://localhost:5050/api/change_password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: user.id,
+        old_password: oldPass,
+        new_password: newPass,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "change password failed");
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

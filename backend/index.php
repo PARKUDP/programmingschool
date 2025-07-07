@@ -43,6 +43,34 @@ if ($path === '/api/login' && $method === 'POST') {
     json_response(['message' => 'Logged in', 'user_id' => $user['id'], 'is_admin' => (int)$user['is_admin']]);
 }
 
+if ($path === '/api/change_password' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['user_id']) || !isset($data['old_password']) || !isset($data['new_password'])) {
+        json_response(['error' => 'user_id, old_password and new_password required'], 400);
+    }
+    $stmt = $pdo->prepare('SELECT password_hash FROM user WHERE id = ?');
+    $stmt->execute([$data['user_id']]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user || !password_verify($data['old_password'], $user['password_hash'])) {
+        json_response(['error' => 'invalid credentials'], 401);
+    }
+    $newHash = password_hash($data['new_password'], PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('UPDATE user SET password_hash = ? WHERE id = ?');
+    $stmt->execute([$newHash, $data['user_id']]);
+    json_response(['message' => 'Password changed']);
+}
+
+if ($path === '/api/reset_password' && $method === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['user_id']) || !isset($data['new_password'])) {
+        json_response(['error' => 'user_id and new_password required'], 400);
+    }
+    $newHash = password_hash($data['new_password'], PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('UPDATE user SET password_hash = ? WHERE id = ?');
+    $stmt->execute([$newHash, $data['user_id']]);
+    json_response(['message' => 'Password reset']);
+}
+
 if ($path === '/api/materials' && $method === 'GET') {
     $stmt = $pdo->query('SELECT id, title FROM material');
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
@@ -56,6 +84,22 @@ if ($path === '/api/materials' && $method === 'POST') {
     json_response(['message' => 'Created', 'material_id' => $pdo->lastInsertId()], 201);
 }
 
+if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $material_id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
+    $stmt = $pdo->prepare('UPDATE material SET title = ? WHERE id = ?');
+    $stmt->execute([$data['title'], $material_id]);
+    json_response(['message' => 'Updated']);
+}
+
+if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $material_id = $m[1];
+    $stmt = $pdo->prepare('DELETE FROM material WHERE id = ?');
+    $stmt->execute([$material_id]);
+    json_response(['message' => 'Deleted']);
+}
+
 if ($path === '/api/lessons' && $method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['material_id']) || !isset($data['title'])) {
@@ -64,6 +108,27 @@ if ($path === '/api/lessons' && $method === 'POST') {
     $stmt = $pdo->prepare('INSERT INTO lesson (material_id, title, description) VALUES (?,?,?)');
     $stmt->execute([$data['material_id'], $data['title'], $data['description'] ?? null]);
     json_response(['message' => 'Lesson created', 'lesson_id' => $pdo->lastInsertId()], 201);
+}
+
+if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $lesson_id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
+    $stmt = $pdo->prepare('UPDATE lesson SET material_id = ?, title = ?, description = ? WHERE id = ?');
+    $stmt->execute([
+        $data['material_id'] ?? null,
+        $data['title'],
+        $data['description'] ?? null,
+        $lesson_id
+    ]);
+    json_response(['message' => 'Lesson updated']);
+}
+
+if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $lesson_id = $m[1];
+    $stmt = $pdo->prepare('DELETE FROM lesson WHERE id = ?');
+    $stmt->execute([$lesson_id]);
+    json_response(['message' => 'Lesson deleted']);
 }
 
 if ($path === '/api/lessons/by_material' && $method === 'GET') {
