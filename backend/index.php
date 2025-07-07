@@ -450,5 +450,29 @@ if ($path === '/api/progress' && $method === 'GET') {
     ]);
 }
 
+if ($path === '/api/user_progress' && $method === 'GET') {
+    $stmt = $pdo->query("SELECT u.id, u.username, COUNT(s.id) AS submissions, SUM(CASE WHEN s.result = 'AC' THEN 1 ELSE 0 END) AS correct FROM user u LEFT JOIN submission s ON u.id = s.user_id GROUP BY u.id, u.username");
+    $res = [];
+    foreach ($stmt as $row) {
+        $sub = (int)$row['submissions'];
+        $correct = (int)$row['correct'];
+        $accuracy = $sub ? round($correct / $sub * 100, 2) : 0;
+        $res[] = [
+            'user_id' => (int)$row['id'],
+            'username' => $row['username'],
+            'submissions' => $sub,
+            'correct' => $correct,
+            'accuracy' => $accuracy
+        ];
+    }
+    json_response($res);
+}
+
+if ($path === '/api/unsubmitted' && $method === 'GET') {
+    $stmt = $pdo->query('SELECT id, username FROM user WHERE id NOT IN (SELECT DISTINCT user_id FROM submission)');
+    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    json_response($users);
+}
+
 json_response(['error' => 'Not found'], 404);
 ?>
