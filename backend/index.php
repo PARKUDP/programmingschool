@@ -227,6 +227,35 @@ if ($path === '/api/testcases' && $method === 'POST') {
     json_response(['message' => 'Test case created', 'testcase_id' => $pdo->lastInsertId()], 201);
 }
 
+if ($path === '/api/testcases' && $method === 'GET') {
+    $problem_id = $_GET['problem_id'] ?? null;
+    if ($problem_id) {
+        $stmt = $pdo->prepare('SELECT id, problem_id, input, expected_output FROM test_case WHERE problem_id = ?');
+        $stmt->execute([$problem_id]);
+    } else {
+        $stmt = $pdo->query('SELECT id, problem_id, input, expected_output FROM test_case');
+    }
+    json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'PUT') {
+    $id = $m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
+        json_response(['error' => 'missing fields'], 400);
+    }
+    $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ? WHERE id = ?');
+    $stmt->execute([$data['input'], $data['expected_output'], $id]);
+    json_response(['message' => 'Updated']);
+}
+
+if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'DELETE') {
+    $id = $m[1];
+    $stmt = $pdo->prepare('DELETE FROM test_case WHERE id = ?');
+    $stmt->execute([$id]);
+    json_response(['message' => 'Deleted']);
+}
+
 if ($path === '/api/submit' && $method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['user_id']) || !isset($data['problem_id']) || !isset($data['code'])) {
