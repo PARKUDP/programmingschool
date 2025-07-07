@@ -13,6 +13,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AssignmentList from "./pages/AssignmentList";
 import AdminCreateAssignment from "./pages/AdminCreateAssignment";
 import ChangePassword from "./pages/ChangePassword";
+import AdminProblemList from "./pages/AdminProblemList";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
         <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/admin/materials" element={<AdminMaterialList />} />
         <Route path="/admin/materials/:materialId/lessons" element={<AdminLessonList />} />
+        <Route path="/admin/lessons/:lessonId/problems" element={<AdminProblemList />} />
         <Route path="/admin/problems/create" element={<AdminCreateProblem />} />
         <Route path="/admin/users/register" element={<AdminRegisterUser />} />
       </Routes>
