@@ -130,9 +130,13 @@ if ($path === '/api/change_password' && $method === 'POST') {
 }
 
 if ($path === '/api/reset_password' && $method === 'POST') {
+    global $current_user;
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['user_id']) || !isset($data['new_password'])) {
         json_response(['error' => 'user_id and new_password required'], 400);
+    }
+    if ($current_user['id'] != $data['user_id']) {
+        require_admin();
     }
     $newHash = password_hash($data['new_password'], PASSWORD_DEFAULT);
     $stmt = $pdo->prepare('UPDATE user SET password_hash = ? WHERE id = ?');
