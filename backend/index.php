@@ -282,18 +282,23 @@ if ($path === '/api/testcases' && $method === 'POST') {
     if (!isset($data['problem_id']) || !array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
         json_response(['error' => 'missing fields'], 400);
     }
-    $stmt = $pdo->prepare('INSERT INTO test_case (problem_id, input, expected_output) VALUES (?,?,?)');
-    $stmt->execute([$data['problem_id'], $data['input'], $data['expected_output']]);
+    $stmt = $pdo->prepare('INSERT INTO test_case (problem_id, input, expected_output, comment) VALUES (?,?,?,?)');
+    $stmt->execute([
+        $data['problem_id'],
+        $data['input'],
+        $data['expected_output'],
+        $data['comment'] ?? null
+    ]);
     json_response(['message' => 'Test case created', 'testcase_id' => $pdo->lastInsertId()], 201);
 }
 
 if ($path === '/api/testcases' && $method === 'GET') {
     $problem_id = $_GET['problem_id'] ?? null;
     if ($problem_id) {
-        $stmt = $pdo->prepare('SELECT id, problem_id, input, expected_output FROM test_case WHERE problem_id = ?');
+        $stmt = $pdo->prepare('SELECT id, problem_id, input, expected_output, comment FROM test_case WHERE problem_id = ?');
         $stmt->execute([$problem_id]);
     } else {
-        $stmt = $pdo->query('SELECT id, problem_id, input, expected_output FROM test_case');
+        $stmt = $pdo->query('SELECT id, problem_id, input, expected_output, comment FROM test_case');
     }
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
@@ -304,8 +309,13 @@ if (preg_match('#^/api/testcases/(\d+)$#', $path, $m) && $method === 'PUT') {
     if (!array_key_exists('input', $data) || !array_key_exists('expected_output', $data)) {
         json_response(['error' => 'missing fields'], 400);
     }
-    $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ? WHERE id = ?');
-    $stmt->execute([$data['input'], $data['expected_output'], $id]);
+    $stmt = $pdo->prepare('UPDATE test_case SET input = ?, expected_output = ?, comment = ? WHERE id = ?');
+    $stmt->execute([
+        $data['input'],
+        $data['expected_output'],
+        $data['comment'] ?? null,
+        $id
+    ]);
     json_response(['message' => 'Updated']);
 }
 

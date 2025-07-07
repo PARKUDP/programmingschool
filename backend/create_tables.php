@@ -49,8 +49,22 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS test_case (
     problem_id INTEGER NOT NULL,
     input TEXT,
     expected_output TEXT,
+    comment TEXT,
     FOREIGN KEY(problem_id) REFERENCES problem(id) ON DELETE CASCADE
 );");
+
+// migrate existing table to include comment column if it's missing
+$cols = $pdo->query('PRAGMA table_info(test_case)')->fetchAll(PDO::FETCH_ASSOC);
+$hasComment = false;
+foreach ($cols as $c) {
+    if ($c['name'] === 'comment') {
+        $hasComment = true;
+        break;
+    }
+}
+if (!$hasComment) {
+    $pdo->exec('ALTER TABLE test_case ADD COLUMN comment TEXT');
+}
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS submission (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
