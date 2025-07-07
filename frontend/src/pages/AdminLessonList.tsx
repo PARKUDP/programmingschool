@@ -22,6 +22,12 @@ const AdminLessonList: React.FC = () => {
       .then(data => setLessons(data));
   }, [id]);
 
+  const refresh = () => {
+    fetch(`http://localhost:5050/api/lessons/by_material?material_id=${id}`)
+      .then(res => res.json())
+      .then(data => setLessons(data));
+  };
+
   const handleCreate = () => {
     authFetch("http://localhost:5050/api/lessons", {
       method: "POST",
@@ -41,6 +47,22 @@ const AdminLessonList: React.FC = () => {
       });
   };
 
+  const handleEdit = (lesson: Lesson) => {
+    const title = prompt("新しいタイトル", lesson.title);
+    if (!title) return;
+    const desc = prompt("説明", lesson.description || "") ?? lesson.description;
+    fetch(`http://localhost:5050/api/lessons/${lesson.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ material_id: Number(id), title, description: desc }),
+    }).then(refresh);
+  };
+
+  const handleDelete = (lessonId: number) => {
+    if (!window.confirm("削除しますか？")) return;
+    fetch(`http://localhost:5050/api/lessons/${lessonId}`, { method: "DELETE" }).then(refresh);
+  };
+
   return (
     <div style={{ padding: "2rem" }}>
       <h1>レッスン一覧</h1>
@@ -48,6 +70,8 @@ const AdminLessonList: React.FC = () => {
         {lessons.map(lesson => (
           <li key={lesson.id}>
             {lesson.title} - <button onClick={() => navigate(`/admin/lessons/${lesson.id}/problems`)}>問題へ</button>
+            <button onClick={() => handleEdit(lesson)} style={{ marginLeft: "0.5rem" }}>編集</button>
+            <button onClick={() => handleDelete(lesson.id)} style={{ marginLeft: "0.5rem" }}>削除</button>
           </li>
         ))}
       </ul>
