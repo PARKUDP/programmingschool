@@ -69,7 +69,7 @@ const AdminLessonList: React.FC = () => {
       <ul>
         {lessons.map(lesson => (
           <li key={lesson.id}>
-            {lesson.title} - <button onClick={() => navigate(`/admin/lessons/${lesson.id}/problems`)}>問題へ</button>
+            {lesson.title} - <button onClick={() => navigate(`/admin/assignments/create?lesson_id=${lesson.id}`)}>宿題作成</button>
             <button onClick={() => handleEdit(lesson)} style={{ marginLeft: "0.5rem" }}>編集</button>
             <button onClick={() => handleDelete(lesson.id)} style={{ marginLeft: "0.5rem" }}>削除</button>
           </li>
