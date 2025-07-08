@@ -12,8 +12,20 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS user (
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS material (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL
+    title TEXT NOT NULL,
+    description TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );");
+
+// マイグレーション：既存DBに description, created_at カラムを追加
+$cols = $pdo->query('PRAGMA table_info(material)')->fetchAll(PDO::FETCH_ASSOC);
+$colNames = array_column($cols, 'name');
+if (!in_array('description', $colNames)) {
+    $pdo->exec('ALTER TABLE material ADD COLUMN description TEXT');
+}
+if (!in_array('created_at', $colNames)) {
+    $pdo->exec("ALTER TABLE material ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP");
+}
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS lesson (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

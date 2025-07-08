@@ -145,7 +145,7 @@ if ($path === '/api/reset_password' && $method === 'POST') {
 }
 
 if ($path === '/api/materials' && $method === 'GET') {
-    $stmt = $pdo->query('SELECT id, title FROM material');
+    $stmt = $pdo->query('SELECT id, title, description, created_at FROM material');
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
 
@@ -153,8 +153,11 @@ if ($path === '/api/materials' && $method === 'POST') {
     require_admin();
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
-    $stmt = $pdo->prepare('INSERT INTO material (title) VALUES (?)');
-    $stmt->execute([$data['title']]);
+    $stmt = $pdo->prepare('INSERT INTO material (title, description) VALUES (?, ?)');
+    $stmt->execute([
+        $data['title'],
+        $data['description'] ?? null
+    ]);
     json_response(['message' => 'Created', 'material_id' => $pdo->lastInsertId()], 201);
 }
 
@@ -163,8 +166,12 @@ if (preg_match('#^/api/materials/(\d+)$#', $path, $m) && $method === 'PUT') {
     $material_id = $m[1];
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['title'])) json_response(['error' => 'title required'], 400);
-    $stmt = $pdo->prepare('UPDATE material SET title = ? WHERE id = ?');
-    $stmt->execute([$data['title'], $material_id]);
+    $stmt = $pdo->prepare('UPDATE material SET title = ?, description = ? WHERE id = ?');
+    $stmt->execute([
+        $data['title'],
+        $data['description'] ?? null,
+        $material_id
+    ]);
     json_response(['message' => 'Updated']);
 }
 
