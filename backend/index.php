@@ -506,10 +506,34 @@ if ($path === '/api/progress' && $method === 'GET') {
             $compStmt->execute([$m['id']]);
         }
         $completed = (int)$compStmt->fetchColumn();
-        
+
         $materials[] = [
             'material_id' => (int)$m['id'],
             'title' => $m['title'],
+            'completed' => $completed,
+            'total' => $total
+        ];
+    }
+
+    $lessons = [];
+    $lessonStmt = $pdo->query('SELECT id, title FROM lesson');
+    foreach ($lessonStmt as $l) {
+        $totalA = $pdo->prepare('SELECT COUNT(*) FROM assignment WHERE lesson_id = ?');
+        $totalA->execute([$l['id']]);
+        $total = (int)$totalA->fetchColumn();
+
+        if ($user_id) {
+            $compStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment.id) FROM assignment JOIN submission s ON s.assignment_id = assignment.id WHERE s.user_id = ? AND s.is_correct = 1 AND assignment.lesson_id = ?');
+            $compStmt->execute([$user_id, $l['id']]);
+        } else {
+            $compStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment.id) FROM assignment JOIN submission s ON s.assignment_id = assignment.id WHERE s.is_correct = 1 AND assignment.lesson_id = ?');
+            $compStmt->execute([$l['id']]);
+        }
+        $completed = (int)$compStmt->fetchColumn();
+
+        $lessons[] = [
+            'lesson_id' => (int)$l['id'],
+            'title' => $l['title'],
             'completed' => $completed,
             'total' => $total
         ];
@@ -521,7 +545,8 @@ if ($path === '/api/progress' && $method === 'GET') {
         'incorrect' => $incorrect,
         'unsubmitted' => $unsubmitted,
         'daily_counts' => $daily,
-        'material_progress' => $materials
+        'material_progress' => $materials,
+        'lesson_progress' => $lessons
     ]);
 }
 
