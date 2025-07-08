@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 const AdminMaterialList: React.FC = () => {
   const [materials, setMaterials] = useState([]);
   const [newTitle, setNewTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
   const navigate = useNavigate();
   const { authFetch } = useAuth();
 
@@ -18,11 +19,12 @@ const AdminMaterialList: React.FC = () => {
     authFetch("http://localhost:5050/api/materials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: newTitle }),
+      body: JSON.stringify({ title: newTitle, description: newDescription }),
     })
       .then((res) => res.json())
       .then(() => {
         setNewTitle("");
+        setNewDescription("");
         return authFetch("http://localhost:5050/api/materials");
       })
       .then((res) => res.json())
@@ -35,13 +37,19 @@ const AdminMaterialList: React.FC = () => {
       .then((data) => setMaterials(data));
   };
 
-  const handleEdit = (id: number, currentTitle: string) => {
+  const handleEdit = (
+    id: number,
+    currentTitle: string,
+    currentDescription: string | null
+  ) => {
     const title = prompt("新しいタイトル", currentTitle);
-    if (!title) return;
+    if (title === null) return;
+    const description = prompt("説明", currentDescription ?? "");
+    if (description === null) return;
     fetch(`http://localhost:5050/api/materials/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, description }),
     }).then(refresh);
   };
 
@@ -61,6 +69,13 @@ const AdminMaterialList: React.FC = () => {
         value={newTitle}
         onChange={(e) => setNewTitle(e.target.value)}
       />
+      <input
+        type="text"
+        placeholder="説明"
+        value={newDescription}
+        onChange={(e) => setNewDescription(e.target.value)}
+        style={{ marginLeft: "0.5rem" }}
+      />
       <button onClick={handleCreate}>教材を追加</button>
       <ul>
         {materials.map((m: any) => (
@@ -68,7 +83,11 @@ const AdminMaterialList: React.FC = () => {
             <button onClick={() => navigate(`/admin/materials/${m.id}/lessons`)}>
               {m.title}
             </button>
-            <button onClick={() => handleEdit(m.id, m.title)} style={{ marginLeft: "0.5rem" }}>
+            <span style={{ marginLeft: "0.5rem" }}>{m.description}</span>
+            <button
+              onClick={() => handleEdit(m.id, m.title, m.description)}
+              style={{ marginLeft: "0.5rem" }}
+            >
               編集
             </button>
             <button onClick={() => handleDelete(m.id)} style={{ marginLeft: "0.5rem" }}>
