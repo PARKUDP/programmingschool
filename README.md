@@ -130,7 +130,7 @@
 
 ## 起動方法
 
-Docker Compose を使用してフロントエンドとバックエンドを同時に起動できます：
+Docker Compose を使用してフロントエンドとバックエンドを同時に起動できます。フロントエンドは Vite の開発サーバーで起動します：
 
 ```bash
 docker-compose up --build
