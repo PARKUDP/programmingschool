@@ -14,6 +14,13 @@ interface MaterialProgress {
   total: number;
 }
 
+interface LessonProgress {
+  lesson_id: number;
+  title: string;
+  completed: number;
+  total: number;
+}
+
 interface ProgressData {
   total_assignments: number;
   correct: number;
@@ -21,6 +28,7 @@ interface ProgressData {
   unsubmitted: number;
   daily_counts: DailyCount[];
   material_progress: MaterialProgress[];
+  lesson_progress: LessonProgress[];
 }
 
 interface UserProgress {
@@ -103,6 +111,27 @@ const AdminDashboard: React.FC = () => {
             </div>
             <small>
               {m.completed}/{m.total}
+            </small>
+          </li>
+        ))}
+      </ul>
+
+      <h2>レッスン別進捗</h2>
+      <ul>
+        {data.lesson_progress.map((l) => (
+          <li key={l.lesson_id} style={{ marginBottom: "0.5rem" }}>
+            <div>{l.title}</div>
+            <div style={{ background: "#eee", width: "100%", height: "20px" }}>
+              <div
+                style={{
+                  width: `${l.total ? (l.completed / l.total) * 100 : 0}%`,
+                  background: "#82ca9d",
+                  height: "100%",
+                }}
+              />
+            </div>
+            <small>
+              {l.completed}/{l.total}
             </small>
           </li>
         ))}
