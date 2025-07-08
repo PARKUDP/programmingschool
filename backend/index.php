@@ -10,6 +10,35 @@ $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $secret = getenv('JWT_SECRET') ?: 'secretkey';
 $current_user = null;
 
+// Simple cache utilities using APCu if available, otherwise temporary files
+function cache_get(string $key) {
+    if (function_exists('apcu_fetch')) {
+        $success = false;
+        $data = apcu_fetch($key, $success);
+        return $success ? $data : false;
+    }
+    $file = sys_get_temp_dir() . '/ps_' . md5($key);
+    if (!file_exists($file)) return false;
+    $raw = json_decode(file_get_contents($file), true);
+    if (!$raw || ($raw['expires'] ?? 0) < time()) {
+        @unlink($file);
+        return false;
+    }
+    return $raw['value'];
+}
+
+function cache_set(string $key, $value, int $ttl) {
+    if (function_exists('apcu_store')) {
+        apcu_store($key, $value, $ttl);
+        return;
+    }
+    $file = sys_get_temp_dir() . '/ps_' . md5($key);
+    file_put_contents($file, json_encode([
+        'expires' => time() + $ttl,
+        'value' => $value,
+    ]));
+}
+
 function base64url_encode(string $data): string {
     return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
 }
@@ -454,6 +483,11 @@ if (preg_match('#^/api/submissions/(\d+)$#', $path, $m) && $method === 'GET') {
 
 if ($path === '/api/progress' && $method === 'GET') {
     $user_id = $_GET['user_id'] ?? null;
+    $force = isset($_GET['force']);
+    $cacheKey = 'progress_' . ($user_id ?: 'all');
+    if (!$force && ($cached = cache_get($cacheKey))) {
+        json_response($cached);
+    }
 
     if ($user_id) {
         $totalStmt = $pdo->prepare('SELECT COUNT(*) FROM submission WHERE user_id = ?');
@@ -539,7 +573,7 @@ if ($path === '/api/progress' && $method === 'GET') {
         ];
     }
 
-    json_response([
+    $response = [
         'total_assignments' => $totalAssignments,
         'correct' => $correct,
         'incorrect' => $incorrect,
@@ -547,7 +581,9 @@ if ($path === '/api/progress' && $method === 'GET') {
         'daily_counts' => $daily,
         'material_progress' => $materials,
         'lesson_progress' => $lessons
-    ]);
+    ];
+    cache_set($cacheKey, $response, 60);
+    json_response($response);
 }
 
 if ($path === '/api/user_progress' && $method === 'GET') {

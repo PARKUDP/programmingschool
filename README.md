@@ -143,3 +143,8 @@ docker-compose up --build
 
 学習者用 `/dashboard` と管理者用 `/admin/dashboard` では Recharts を利用した
 円グラフ・棒グラフ・進捗バーで提出状況を確認できます。
+
+### API キャッシュ
+
+`/api/progress` の集計結果は 60 秒間キャッシュされます。`force=1` を
+クエリに付与するとキャッシュを無視して再計算できます。
