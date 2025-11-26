@@ -2,7 +2,18 @@
 require_once __DIR__ . '/db.php';
 $pdo = getPDO();
 
+// CORS ヘッダーを設定
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
+
+// OPTIONS リクエストに応答
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
@@ -218,9 +229,18 @@ if ($path === '/api/lessons' && $method === 'POST') {
     if (!isset($data['material_id']) || !isset($data['title'])) {
         json_response(['error' => 'material_id and title required'], 400);
     }
-    $stmt = $pdo->prepare('INSERT INTO lesson (material_id, title, description) VALUES (?,?,?)');
-    $stmt->execute([$data['material_id'], $data['title'], $data['description'] ?? null]);
-    json_response(['message' => 'Lesson created', 'lesson_id' => $pdo->lastInsertId()], 201);
+    // material_id の妥当性チェック
+    $material_id = intval($data['material_id']);
+    if ($material_id <= 0) {
+        json_response(['error' => 'Invalid material_id'], 400);
+    }
+    try {
+        $stmt = $pdo->prepare('INSERT INTO lesson (material_id, title, description) VALUES (?,?,?)');
+        $stmt->execute([$material_id, $data['title'], $data['description'] ?? null]);
+        json_response(['message' => 'Lesson created', 'lesson_id' => $pdo->lastInsertId()], 201);
+    } catch (Exception $e) {
+        json_response(['error' => $e->getMessage()], 500);
+    }
 }
 
 if (preg_match('#^/api/lessons/(\d+)$#', $path, $m) && $method === 'PUT') {
@@ -312,7 +332,7 @@ if (preg_match('#^/api/problems/(\d+)$#', $path, $m) && $method === 'DELETE') {
 }
 
 if ($path === '/api/assignments' && $method === 'GET') {
-    $stmt = $pdo->query('SELECT id, lesson_id, title, description, question_text, input_example, file_path, created_at FROM assignment');
+    $stmt = $pdo->query('SELECT id, lesson_id, title, description, question_text, input_example, expected_output, file_path, created_at FROM assignment');
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
 
@@ -324,6 +344,7 @@ if ($path === '/api/assignments' && $method === 'POST') {
     $description = $_POST['description'] ?? null;
     $question_text = $_POST['question_text'] ?? null;
     $input_example = $_POST['input_example'] ?? null;
+    $expected_output = $_POST['expected_output'] ?? null;
 
     $file_path = null;
     if (!empty($_FILES['file']['tmp_name'])) {
@@ -336,13 +357,13 @@ if ($path === '/api/assignments' && $method === 'POST') {
         }
     }
 
-    $stmt = $pdo->prepare('INSERT INTO assignment (lesson_id, title, description, question_text, input_example, file_path, created_at) VALUES (?,?,?,?,?,?,datetime("now"))');
-    $stmt->execute([$lesson_id, $title, $description, $question_text, $input_example, $file_path]);
+    $stmt = $pdo->prepare('INSERT INTO assignment (lesson_id, title, description, question_text, input_example, expected_output, file_path, created_at) VALUES (?,?,?,?,?,?,?,datetime("now"))');
+    $stmt->execute([$lesson_id, $title, $description, $question_text, $input_example, $expected_output, $file_path]);
     json_response(['message' => 'Assignment created', 'assignment_id' => $pdo->lastInsertId()], 201);
 }
 
 if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'GET') {
-    $stmt = $pdo->prepare('SELECT id, lesson_id, title, description, question_text, input_example, file_path, created_at FROM assignment WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT id, lesson_id, title, description, question_text, input_example, expected_output, file_path, created_at FROM assignment WHERE id = ?');
     $stmt->execute([$m[1]]);
     $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$assignment) json_response(['error' => 'Not found'], 404);

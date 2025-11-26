@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { apiEndpoints } from "../config/api";
 
 export type Assignment = {
   id: number;
@@ -12,9 +14,10 @@ export type Assignment = {
 
 const AssignmentList: React.FC = () => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const { authFetch } = useAuth();
 
   useEffect(() => {
-    fetch("http://localhost:5050/api/assignments")
+    authFetch(apiEndpoints.assignments)
       .then(res => res.json())
       .then(data => setAssignments(data));
   }, []);
@@ -29,7 +32,7 @@ const AssignmentList: React.FC = () => {
             <p>{a.question_text}</p>
             {a.file_path && (
               <p>
-                <a href={`http://localhost:5050/${a.file_path}`} target="_blank" rel="noopener noreferrer">
+                <a href={`${apiEndpoints.assignments}/../${a.file_path}`} target="_blank" rel="noopener noreferrer">
                   添付ファイル
                 </a>
               </p>

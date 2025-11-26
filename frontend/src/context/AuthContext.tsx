@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
+import { apiEndpoints } from "../config/api";
 
 type AuthUser = {
   id: number;
@@ -49,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const changePassword = async (oldPass: string, newPass: string) => {
     if (!user) throw new Error("not logged in");
-    const res = await fetch("http://localhost:5050/api/change_password", {
+    const res = await fetch(apiEndpoints.changePassword, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

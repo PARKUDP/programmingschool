@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { apiEndpoints } from "../config/api";
 
 interface Problem {
   id: number;
@@ -17,7 +18,7 @@ const AdminProblemList: React.FC = () => {
   useEffect(() => {
     if (!lessonId) return;
     authFetch(
-      `http://localhost:5050/api/problems/by_lesson?lesson_id=${lessonId}`
+      `${apiEndpoints.problems}/by_lesson?lesson_id=${lessonId}`
     )
       .then((res) => res.json())
       .then((data) => setProblems(data));
@@ -25,7 +26,7 @@ const AdminProblemList: React.FC = () => {
 
   const refresh = () => {
     authFetch(
-      `http://localhost:5050/api/problems/by_lesson?lesson_id=${lessonId}`
+      `${apiEndpoints.problems}/by_lesson?lesson_id=${lessonId}`
     )
       .then((res) => res.json())
       .then((data) => setProblems(data));
@@ -35,7 +36,7 @@ const AdminProblemList: React.FC = () => {
     const title = prompt("新しいタイトル", p.title);
     if (title === null) return;
     const markdown = prompt("問題文", p.markdown ?? "") ?? p.markdown;
-    authFetch(`http://localhost:5050/api/problems/${p.id}`, {
+    authFetch(`${apiEndpoints.problems}/${p.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -48,7 +49,7 @@ const AdminProblemList: React.FC = () => {
 
   const handleDelete = (id: number) => {
     if (!window.confirm("削除しますか？")) return;
-    authFetch(`http://localhost:5050/api/problems/${id}`, { method: "DELETE" }).then(
+    authFetch(`${apiEndpoints.problems}/${id}`, { method: "DELETE" }).then(
       refresh
     );
   };

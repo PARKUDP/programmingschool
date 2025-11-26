@@ -51,10 +51,18 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS assignment (
     description TEXT,
     question_text TEXT,
     input_example TEXT,
+    expected_output TEXT,
     file_path TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(lesson_id) REFERENCES lesson(id) ON DELETE CASCADE
 );");
+
+// マイグレーション：既存DBに expected_output カラムを追加
+$cols = $pdo->query('PRAGMA table_info(assignment)')->fetchAll(PDO::FETCH_ASSOC);
+$colNames = array_column($cols, 'name');
+if (!in_array('expected_output', $colNames)) {
+    $pdo->exec('ALTER TABLE assignment ADD COLUMN expected_output TEXT');
+};
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS test_case (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

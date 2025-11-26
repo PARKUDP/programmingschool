@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { apiEndpoints } from "../config/api";
 import CodeEditor from "../components/CodeEditor";
 
 type Assignment = {
@@ -21,13 +22,13 @@ const ProblemDetail: React.FC = () => {
   const [result, setResult] = useState<string>("");
 
   useEffect(() => {
-    authFetch(`http://localhost:5050/api/assignments/${id}`)
+    authFetch(`${apiEndpoints.assignments}/${id}`)
       .then((res) => res.json())
       .then((data) => setAssignment(data));
   }, [id]);
 
   const handleSubmit = () => {
-    authFetch("http://localhost:5050/api/submit", {
+    authFetch(apiEndpoints.submit, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
