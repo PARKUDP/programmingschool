@@ -17,6 +17,7 @@ const AdminLessonList: React.FC = () => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editModal, setEditModal] = useState<{ isOpen: boolean; id: number | null; title: string; description: string }>({ isOpen: false, id: null, title: "", description: "" });
   const navigate = useNavigate();
   const { authFetch } = useAuth();
 
@@ -68,33 +69,36 @@ const AdminLessonList: React.FC = () => {
         throw new Error(errData.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      setMessage("✅ レッスンを作成しました");
+      setMessage("レッスンを作成しました");
       setLessons(prev => [...prev, { id: data.lesson_id, title: newTitle, description }]);
       setNewTitle("");
       setDescription("");
     } catch (err: any) {
       console.error("Create lesson error:", err);
-      setError("⚠️ " + (err.message || "作成に失敗しました"));
+      setError((err.message || "作成に失敗しました"));
     } finally {
       setLoading(false);
     }
   };
 
   const handleEdit = async (lesson: Lesson) => {
-    const title = prompt("新しいタイトル", lesson.title);
-    if (!title) return;
-    const desc = prompt("説明", lesson.description || "") ?? lesson.description;
+    setEditModal({ isOpen: true, id: lesson.id, title: lesson.title, description: lesson.description || "" });
+  };
+
+  const handleUpdateLesson = async () => {
+    if (!editModal.id || !editModal.title.trim()) return;
     try {
-      const res = await authFetch(`${apiEndpoints.lessons}/${lesson.id}`, {
+      const res = await authFetch(`${apiEndpoints.lessons}/${editModal.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ material_id: Number(materialId), title, description: desc }),
+        body: JSON.stringify({ material_id: Number(materialId), title: editModal.title, description: editModal.description }),
       });
       if (!res.ok) throw new Error("編集失敗");
-      setMessage("✅ レッスンを更新しました");
+      setMessage("レッスンを更新しました");
+      setEditModal({ isOpen: false, id: null, title: "", description: "" });
       await fetchLessons();
     } catch (err: any) {
-      setError("⚠️ " + (err.message || "編集に失敗しました"));
+      setError((err.message || "編集に失敗しました"));
     }
   };
 
@@ -103,17 +107,17 @@ const AdminLessonList: React.FC = () => {
     try {
       const res = await authFetch(`${apiEndpoints.lessons}/${lessonId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("削除失敗");
-      setMessage("✅ レッスンを削除しました");
+      setMessage("レッスンを削除しました");
       await fetchLessons();
     } catch (err: any) {
-      setError("⚠️ " + (err.message || "削除に失敗しました"));
+      setError((err.message || "削除に失敗しました"));
     }
   };
 
   return (
     <div className="page-container">
       <div className="page-header">
-        <h1 className="page-title">📚 レッスン一覧</h1>
+        <h1 className="page-title">レッスン一覧</h1>
         <p className="page-subtitle">レッスンを管理します</p>
       </div>
 
@@ -124,7 +128,7 @@ const AdminLessonList: React.FC = () => {
         <div className="card-title">新規レッスン作成</div>
         <div className="form-section">
           <div className="form-group">
-            <label className="form-label">📌 タイトル</label>
+            <label className="form-label">タイトル</label>
             <input
               className="form-input"
               type="text"
@@ -135,7 +139,7 @@ const AdminLessonList: React.FC = () => {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">📖 説明</label>
+            <label className="form-label">説明</label>
             <textarea
               className="form-textarea"
               placeholder="レッスンの説明を入力"
@@ -151,7 +155,7 @@ const AdminLessonList: React.FC = () => {
             disabled={loading}
             style={{ width: "100%" }}
           >
-            {loading ? "作成中..." : "📝 レッスンを作成"}
+            {loading ? "作成中..." : "レッスンを作成"}
           </button>
         </div>
       </div>
@@ -159,7 +163,7 @@ const AdminLessonList: React.FC = () => {
       <div className="grid">
         {lessons.length === 0 ? (
           <div className="card" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "3rem" }}>
-            <p style={{ fontSize: "3rem", marginBottom: "1rem" }}>📚</p>
+            <p style={{ fontSize: "3rem", marginBottom: "1rem" }}>教材管理</p>
             <p style={{ color: "var(--text-secondary)" }}>レッスンがありません</p>
           </div>
         ) : (
@@ -175,7 +179,7 @@ const AdminLessonList: React.FC = () => {
                   onClick={() => navigate(`/admin/assignments/create?lesson_id=${lesson.id}`)}
                   style={{ flex: 1 }}
                 >
-                  📝 宿題作成
+                  宿題作成
                 </button>
                 <button
                   className="btn btn-secondary"
@@ -194,6 +198,44 @@ const AdminLessonList: React.FC = () => {
           ))
         )}
       </div>
+
+      {/* 編集モーダル */}
+      {editModal.isOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div className="card" style={{ maxWidth: '500px', width: '90%', margin: 0 }}>
+            <div className="card-title">レッスンを編集</div>
+            <div className="form-group">
+              <label className="form-label">タイトル</label>
+              <input
+                className="form-input"
+                value={editModal.title}
+                onChange={e => setEditModal({ ...editModal, title: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">説明</label>
+              <textarea
+                className="form-textarea"
+                value={editModal.description}
+                onChange={e => setEditModal({ ...editModal, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setEditModal({ isOpen: false, id: null, title: "", description: "" })}>
+                キャンセル
+              </button>
+              <button className="btn btn-primary" onClick={handleUpdateLesson}>
+                更新
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

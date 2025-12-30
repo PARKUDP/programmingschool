@@ -10,6 +10,7 @@ const AdminMaterialList: React.FC = () => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editModal, setEditModal] = useState<{ isOpen: boolean; id: number | null; title: string; description: string }>({ isOpen: false, id: null, title: "", description: "" });
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
 
@@ -42,33 +43,35 @@ const AdminMaterialList: React.FC = () => {
         body: JSON.stringify({ title: newTitle, description: newDescription }),
       });
       if (!res.ok) throw new Error("作成失敗");
-      setMessage("✅ 教材を追加しました");
+      setMessage("教材を追加しました");
       setNewTitle("");
       setNewDescription("");
       await fetchMaterials();
     } catch (err: any) {
-      setError("⚠️ " + (err.message || "作成に失敗しました"));
+      setError((err.message || "作成に失敗しました"));
     } finally {
       setLoading(false);
     }
   };
 
   const handleEdit = async (id: number, currentTitle: string, currentDescription: string | null) => {
-    const title = prompt("新しいタイトル", currentTitle);
-    if (title === null) return;
-    const description = prompt("説明", currentDescription ?? "");
-    if (description === null) return;
+    setEditModal({ isOpen: true, id, title: currentTitle, description: currentDescription || "" });
+  };
+
+  const handleUpdateMaterial = async () => {
+    if (!editModal.id || !editModal.title.trim()) return;
     try {
-      const res = await authFetch(`${apiEndpoints.materials}/${id}`, {
+      const res = await authFetch(`${apiEndpoints.materials}/${editModal.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description }),
+        body: JSON.stringify({ title: editModal.title, description: editModal.description }),
       });
       if (!res.ok) throw new Error("編集失敗");
-      setMessage("✅ 教材を更新しました");
+      setMessage("教材を更新しました");
+      setEditModal({ isOpen: false, id: null, title: "", description: "" });
       await fetchMaterials();
     } catch (err: any) {
-      setError("⚠️ " + (err.message || "編集に失敗しました"));
+      setError((err.message || "編集に失敗しました"));
     }
   };
 
@@ -79,10 +82,10 @@ const AdminMaterialList: React.FC = () => {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("削除失敗");
-      setMessage("✅ 教材を削除しました");
+      setMessage("教材を削除しました");
       await fetchMaterials();
     } catch (err: any) {
-      setError("⚠️ " + (err.message || "削除に失敗しました"));
+      setError((err.message || "削除に失敗しました"));
     }
   };
 
@@ -95,7 +98,7 @@ const AdminMaterialList: React.FC = () => {
   return (
     <div className="page-container">
       <div className="page-header">
-        <h1 className="page-title">📚 教材一覧</h1>
+        <h1 className="page-title">教材一覧</h1>
         <p className="page-subtitle">教材を管理します</p>
       </div>
 
@@ -142,7 +145,7 @@ const AdminMaterialList: React.FC = () => {
       <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))" }}>
         {materials.length === 0 ? (
           <div className="card" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "3rem" }}>
-            <p style={{ fontSize: "3rem", marginBottom: "1rem" }}>📭</p>
+            <p style={{ fontSize: "3rem", marginBottom: "1rem" }}>教材がありません</p>
             <p style={{ color: "var(--text-secondary)" }}>教材がありません</p>
           </div>
         ) : (
@@ -175,6 +178,44 @@ const AdminMaterialList: React.FC = () => {
           ))
         )}
       </div>
+
+      {/* 編集モーダル */}
+      {editModal.isOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div className="card" style={{ maxWidth: '500px', width: '90%', margin: 0 }}>
+            <div className="card-title">教材を編集</div>
+            <div className="form-group">
+              <label className="form-label">教材名</label>
+              <input
+                className="form-input"
+                value={editModal.title}
+                onChange={e => setEditModal({ ...editModal, title: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">説明</label>
+              <textarea
+                className="form-textarea"
+                value={editModal.description}
+                onChange={e => setEditModal({ ...editModal, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setEditModal({ isOpen: false, id: null, title: "", description: "" })}>
+                キャンセル
+              </button>
+              <button className="btn btn-primary" onClick={handleUpdateMaterial}>
+                更新
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -2,10 +2,11 @@ services:
   backend:
     build: ./backend
     ports:
-      - "5050:5050"
+      - "5050:80"
     volumes:
-      - ./backend:/app
-    command: php -S 0.0.0.0:5050 index.php
+      - ./backend:/var/www/html
+    environment:
+      - APACHE_DOCUMENT_ROOT=/var/www/html
 
   frontend:
     build:

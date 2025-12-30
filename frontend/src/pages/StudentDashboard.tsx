@@ -15,13 +15,6 @@ interface MaterialProgress {
   total: number;
 }
 
-interface LessonProgress {
-  lesson_id: number;
-  title: string;
-  completed: number;
-  total: number;
-}
-
 interface ProgressData {
   total_assignments: number;
   correct: number;
@@ -29,24 +22,28 @@ interface ProgressData {
   unsubmitted: number;
   daily_counts: DailyCount[];
   material_progress: MaterialProgress[];
-  lesson_progress: LessonProgress[];
 }
 
 const StudentDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, authFetch } = useAuth();
   const [data, setData] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
-    fetch(`${apiEndpoints.progress}?user_id=${user.id}`)
-      .then((res) => res.json())
+    authFetch(`${apiEndpoints.progress}?user_id=${user.id}`)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`progress fetch failed: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((d) => {
         setData(d);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [user]);
+  }, [user, authFetch]);
 
   if (!user) return <div style={{ padding: "2rem" }}>ログインしてください</div>;
   if (loading) return <div style={{ padding: "2rem" }}>読み込み中...</div>;
@@ -64,7 +61,7 @@ const StudentDashboard: React.FC = () => {
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem" }}>
       <div style={{ marginBottom: "2rem" }}>
         <h1 style={{ fontSize: "32px", fontWeight: "bold", color: "#1a202c", margin: "0 0 0.5rem 0" }}>
-          📊 学習ダッシュボード
+          学習ダッシュボード
         </h1>
         <p style={{ color: "#718096", margin: "0" }}>
           あなたの学習進捗を確認しましょう
@@ -221,7 +218,7 @@ const StudentDashboard: React.FC = () => {
           }}
         >
           <h3 style={{ fontSize: "16px", fontWeight: "bold", color: "#1a202c", margin: "0 0 1.5rem 0" }}>
-            📚 教材別進捗
+            教材別進捗
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             {data.material_progress.map((m) => {
@@ -255,63 +252,6 @@ const StudentDashboard: React.FC = () => {
                       style={{
                         width: `${percentage}%`,
                         background: "linear-gradient(90deg, #667eea 0%, #764ba2 100%)",
-                        height: "100%",
-                        transition: "width 0.3s ease",
-                        borderRadius: "6px",
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {data.lesson_progress && data.lesson_progress.length > 0 && (
-        <div
-          style={{
-            background: "white",
-            borderRadius: "12px",
-            padding: "1.5rem",
-            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-          }}
-        >
-          <h3 style={{ fontSize: "16px", fontWeight: "bold", color: "#1a202c", margin: "0 0 1.5rem 0" }}>
-            📖 レッスン別進捗
-          </h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {data.lesson_progress.map((l) => {
-              const percentage = l.total ? (l.completed / l.total) * 100 : 0;
-              return (
-                <div key={l.lesson_id}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    <span style={{ fontWeight: "600", color: "#2d3748", fontSize: "14px" }}>
-                      {l.title}
-                    </span>
-                    <span style={{ color: "#718096", fontSize: "12px" }}>
-                      {l.completed}/{l.total}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      background: "#e2e8f0",
-                      width: "100%",
-                      height: "12px",
-                      borderRadius: "6px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${percentage}%`,
-                        background: "linear-gradient(90deg, #10b981 0%, #059669 100%)",
                         height: "100%",
                         transition: "width 0.3s ease",
                         borderRadius: "6px",

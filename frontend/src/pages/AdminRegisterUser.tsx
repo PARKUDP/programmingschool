@@ -1,37 +1,56 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { apiEndpoints } from "../config/api";
+import { useSnackbar } from "../components/SnackbarContext";
+import PageHeader from "../components/PageHeader";
 
 const AdminRegisterUser: React.FC = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<"student" | "teacher" | "admin">("student");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { user, authFetch } = useAuth();
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const { showSnackbar } = useSnackbar();
 
   if (!user) return <div className="page-container"><p className="message message-error">ログインしてください</p></div>;
   if (!user.is_admin) return <div className="page-container"><p className="message message-error">権限がありません</p></div>;
+
+  const usernameValid = username.trim().length >= 1;
+  const passwordValid = password.length >= 8;
 
   const handleRegister = async () => {
     setError("");
     setMessage("");
     setLoading(true);
+    setSubmitAttempted(true);
+    // 明らかな不正入力は即案内し、通信を行わない
+    if (!usernameValid || !passwordValid) {
+      setLoading(false);
+      return;
+    }
     try {
+      if (!usernameValid) throw new Error("ユーザー名を入力してください");
+      if (!passwordValid) throw new Error("パスワードは8文字以上で入力してください");
       const res = await authFetch(apiEndpoints.register, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, is_admin: isAdmin }),
+        body: JSON.stringify({ username, password, role }),
       });
       if (!res.ok) throw new Error("登録失敗");
       await res.json();
       setMessage("ユーザーを登録しました");
+      showSnackbar("ユーザーを登録しました", "success");
       setUsername("");
       setPassword("");
-      setIsAdmin(false);
+      setRole("student");
     } catch (err: any) {
       setError(err.message || "登録に失敗しました");
+      showSnackbar("登録に失敗しました", "error");
     } finally {
       setLoading(false);
     }
@@ -39,14 +58,15 @@ const AdminRegisterUser: React.FC = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">👤 ユーザー登録</h1>
-        <p className="page-subtitle">新しいユーザーを登録します</p>
-      </div>
+      <PageHeader
+        title="ユーザー登録"
+        subtitle="新しいユーザーを登録します"
+        breadcrumbs={[{ label: "管理" }, { label: "ユーザー登録" }]}
+      />
 
       <div className="card" style={{ maxWidth: "500px" }}>
-        {message && <div className="message message-success">✅ {message}</div>}
-        {error && <div className="message message-error">⚠️ {error}</div>}
+        {message && <div className="message message-success">{message}</div>}
+        {error && <div className="message message-error">{error}</div>}
 
         <div className="form-section">
           <div className="form-group">
@@ -56,9 +76,16 @@ const AdminRegisterUser: React.FC = () => {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              onBlur={() => setUsernameTouched(true)}
               placeholder="ユーザー名を入力"
               disabled={loading}
+              aria-invalid={!usernameValid}
+              aria-describedby="username-help"
             />
+            <span id="username-help" className="help-text">3文字以上、記号なしがおすすめです</span>
+            {(!usernameValid && (usernameTouched || submitAttempted)) && (
+              <div className="message message-error" style={{ marginTop: '.5rem' }}>ユーザー名は3文字以上で入力してください</div>
+            )}
           </div>
 
           <div className="form-group">
@@ -68,25 +95,33 @@ const AdminRegisterUser: React.FC = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onBlur={() => setPasswordTouched(true)}
               placeholder="パスワードを入力"
               disabled={loading}
+              aria-invalid={!passwordValid}
+              aria-describedby="password-help"
             />
+            <span id="password-help" className="help-text">8文字以上、英数字を含めて安全に</span>
+            {(!passwordValid && (passwordTouched || submitAttempted)) && (
+              <div className="message message-error" style={{ marginTop: '.5rem' }}>パスワードは8文字以上で入力してください</div>
+            )}
           </div>
 
           <div className="form-group">
-            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", color: "var(--text-primary)", fontWeight: "500" }}>
-              <input
-                type="checkbox"
-                checked={isAdmin}
-                onChange={(e) => setIsAdmin(e.target.checked)}
-                disabled={loading}
-                style={{ width: "18px", height: "18px", cursor: "pointer" }}
-              />
-              管理者権限を付与
-            </label>
+            <label className="form-label">ロール</label>
+            <select 
+              className="form-select"
+              value={role}
+              onChange={(e) => setRole(e.target.value as "student" | "teacher" | "admin")}
+              disabled={loading}
+            >
+              <option value="student">生徒</option>
+              <option value="teacher">先生</option>
+              <option value="admin">管理者</option>
+            </select>
           </div>
 
-          <button className="btn btn-primary" onClick={handleRegister} disabled={loading}>
+          <button className="btn btn-primary" onClick={handleRegister} disabled={loading || !usernameValid || !passwordValid}>
             {loading ? "登録中..." : "ユーザーを登録"}
           </button>
         </div>

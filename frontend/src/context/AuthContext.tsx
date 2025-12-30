@@ -5,6 +5,7 @@ type AuthUser = {
   id: number;
   username: string;
   is_admin: boolean;
+  role?: "student" | "teacher" | "admin";
 };
 
 type AuthContextType = {
@@ -44,13 +45,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const authFetch = (input: RequestInfo, init: RequestInit = {}) => {
     const headers = { ...(init.headers || {}) } as Record<string, string>;
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    // トークンをログ出力（デバッグ用）
+    console.log("[authFetch] token:", token ? "present" : "missing");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    } else {
+      console.warn("[authFetch] トークンがありません。ログインしてください。");
+    }
     return fetch(input, { ...init, headers });
   };
 
   const changePassword = async (oldPass: string, newPass: string) => {
     if (!user) throw new Error("not logged in");
-    const res = await fetch(apiEndpoints.changePassword, {
+    const res = await authFetch(apiEndpoints.changePassword, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

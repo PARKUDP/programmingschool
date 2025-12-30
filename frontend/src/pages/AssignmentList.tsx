@@ -17,10 +17,26 @@ const AssignmentList: React.FC = () => {
   const { authFetch } = useAuth();
 
   useEffect(() => {
-    authFetch(apiEndpoints.assignments)
-      .then(res => res.json())
-      .then(data => setAssignments(data));
-  }, []);
+    authFetch(apiEndpoints.assignmentsAvailable)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setAssignments(data);
+        } else {
+          console.error("予期しないデータ形式:", data);
+          setAssignments([]);
+        }
+      })
+      .catch((err) => {
+        console.error("課題の取得に失敗しました:", err);
+        setAssignments([]);
+      });
+  }, [authFetch]);
 
   return (
     <div style={{ padding: "2rem" }}>

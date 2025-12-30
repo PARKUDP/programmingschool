@@ -12,11 +12,23 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const usernameValid = username.trim().length >= 3;
+  const passwordValid = password.length >= 8;
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setSubmitAttempted(true);
+
+    // 入力が明らかに不正の場合はサーバー通信を行わずに案内のみ
+    if (!usernameValid || !passwordValid) {
+      setLoading(false);
+      return;
+    }
 
     try {
       const response = await fetch(apiEndpoints.login, {
@@ -38,10 +50,12 @@ const Login: React.FC = () => {
           id: data.user_id,
           username: username,
           is_admin: data.is_admin || false,
+          role: data.role || (data.is_admin ? "admin" : "student"),
         },
         data.token
       );
-      navigate(data.is_admin ? "/admin/dashboard" : "/dashboard");
+      const role = data.role || (data.is_admin ? "admin" : "student");
+      navigate(role === "admin" ? "/admin/dashboard" : "/dashboard");
     } catch (err: any) {
       setError(
         err.message || "ログインに失敗しました。ユーザー名またはパスワードを確認してください。"
@@ -56,14 +70,14 @@ const Login: React.FC = () => {
       <div className="login-content">
         <div className="login-card">
           <div className="login-header">
-            <div className="login-icon">📚</div>
+            <img src="/img/logo_image_01.svg" alt="Kidz8" className="login-logo" />
             <h1 className="login-title">Kidz8</h1>
             <p className="login-subtitle">プログラミング学習プラットフォーム</p>
           </div>
 
           {error && (
             <div className="alert alert-error">
-              <span className="alert-icon">⚠️</span>
+              <span className="alert-icon">!</span>
               <span>{error}</span>
             </div>
           )}
@@ -80,10 +94,17 @@ const Login: React.FC = () => {
                 placeholder="ユーザー名を入力"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                onBlur={() => setUsernameTouched(true)}
                 disabled={loading}
                 autoComplete="username"
                 required
+                aria-invalid={!usernameValid}
+                aria-describedby="login-username-help"
               />
+              <span id="login-username-help" className="help-text">3文字以上で入力してください</span>
+              {(!usernameValid && (usernameTouched || submitAttempted)) && (
+                <div className="message message-error" style={{ marginTop: '.5rem' }}>ユーザー名は3文字以上です</div>
+              )}
             </div>
 
             <div className="form-group">
@@ -97,10 +118,17 @@ const Login: React.FC = () => {
                 placeholder="パスワードを入力"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onBlur={() => setPasswordTouched(true)}
                 disabled={loading}
                 autoComplete="current-password"
                 required
+                aria-invalid={!passwordValid}
+                aria-describedby="login-password-help"
               />
+              <span id="login-password-help" className="help-text">8文字以上で入力してください</span>
+              {(!passwordValid && (passwordTouched || submitAttempted)) && (
+                <div className="message message-error" style={{ marginTop: '.5rem' }}>パスワードは8文字以上です</div>
+              )}
             </div>
 
             <button
@@ -113,37 +141,10 @@ const Login: React.FC = () => {
                   <span className="spinner"></span> ログイン中...
                 </>
               ) : (
-                "ログイン"
+                usernameValid && passwordValid ? "ログイン" : "入力を確認してください"
               )}
             </button>
           </form>
-
-          <div className="login-footer">
-            <p className="footer-text">
-              パスワードをお忘れですか？
-              <a href="/reset-password" className="footer-link">
-                リセット
-              </a>
-            </p>
-          </div>
-        </div>
-
-        <div className="login-features">
-          <div className="feature-item">
-            <span className="feature-icon">🎯</span>
-            <h3>実践的な課題</h3>
-            <p>段階的に学べるプログラミング課題</p>
-          </div>
-          <div className="feature-item">
-            <span className="feature-icon">📊</span>
-            <h3>進捗管理</h3>
-            <p>学習成果をリアルタイムで追跡</p>
-          </div>
-          <div className="feature-item">
-            <span className="feature-icon">🚀</span>
-            <h3>スキル向上</h3>
-            <p>Python プログラミングスキル習得</p>
-          </div>
         </div>
       </div>
     </div>

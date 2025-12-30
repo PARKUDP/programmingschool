@@ -2,6 +2,9 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { apiEndpoints } from "../config/api";
+import PageHeader from "../components/PageHeader";
+import EmptyState from "../components/EmptyState";
+import { useSnackbar } from "../components/SnackbarContext";
 
 interface Testcase {
   id: number;
@@ -21,6 +24,9 @@ const AdminCreateTestCase: React.FC = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { authFetch } = useAuth();
+  const { showSnackbar } = useSnackbar();
+  const inputValid = input.trim().length > 0;
+  const expectedValid = expected.trim().length > 0;
 
   useEffect(() => {
     fetchTestcases();
@@ -74,12 +80,14 @@ const AdminCreateTestCase: React.FC = () => {
           comment,
         },
       ]);
-      setMessage("✅ テストケースを追加しました");
+      setMessage("テストケースを追加しました");
+      showSnackbar("テストケースを追加しました", "success");
       setInput("");
       setExpected("");
       setComment("");
     } catch (err: any) {
-      setError("⚠️ " + (err.message || "追加に失敗しました"));
+      setError((err.message || "追加に失敗しました"));
+      showSnackbar("追加に失敗しました", "error");
     } finally {
       setLoading(false);
     }
@@ -97,12 +105,14 @@ const AdminCreateTestCase: React.FC = () => {
         }),
       });
       if (!res.ok) throw new Error("更新失敗");
-      setMessage("✅ テストケースを更新しました");
+      setMessage("テストケースを更新しました");
+      showSnackbar("テストケースを更新しました", "success");
       setTestcases((prev) =>
         prev.map((t) => (t.id === tc.id ? tc : t))
       );
     } catch (err: any) {
-      setError("⚠️ " + (err.message || "更新に失敗しました"));
+      setError((err.message || "更新に失敗しました"));
+      showSnackbar("更新に失敗しました", "error");
     }
   };
 
@@ -111,10 +121,12 @@ const AdminCreateTestCase: React.FC = () => {
     try {
       const res = await authFetch(`${apiEndpoints.testcases}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("削除失敗");
-      setMessage("✅ テストケースを削除しました");
+      setMessage("テストケースを削除しました");
+      showSnackbar("テストケースを削除しました", "success");
       setTestcases((prev) => prev.filter((t) => t.id !== id));
     } catch (err: any) {
-      setError("⚠️ " + (err.message || "削除に失敗しました"));
+      setError((err.message || "削除に失敗しました"));
+      showSnackbar("削除に失敗しました", "error");
     }
   };
 
@@ -130,10 +142,11 @@ const AdminCreateTestCase: React.FC = () => {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">🧪 テストケース管理</h1>
-        <p className="page-subtitle">テストケースを追加・編集します</p>
-      </div>
+      <PageHeader
+        title="テストケース管理"
+        subtitle="テストケースを追加・編集します"
+        breadcrumbs={[{ label: "管理" }, { label: "宿題" }, { label: "テストケース" }]}
+      />
 
       {message && <div className="message message-success">{message}</div>}
       {error && <div className="message message-error">{error}</div>}
@@ -142,7 +155,7 @@ const AdminCreateTestCase: React.FC = () => {
         <div className="card-title">新規テストケース追加</div>
         <div className="form-section">
           <div className="form-group">
-            <label className="form-label">📥 入力</label>
+            <label className="form-label">入力</label>
             <textarea
               className="form-textarea"
               placeholder="テストケースの入力を入力"
@@ -150,10 +163,14 @@ const AdminCreateTestCase: React.FC = () => {
               onChange={(e) => setInput(e.target.value)}
               disabled={loading}
               rows={3}
+              aria-invalid={!inputValid}
+              aria-describedby="tc-input-help"
             />
+            <span id="tc-input-help" className="help-text">空欄にしないでください</span>
+            {!inputValid && <div className="message message-error" style={{ marginTop: '.5rem' }}>入力は必須です</div>}
           </div>
           <div className="form-group">
-            <label className="form-label">✅ 期待出力</label>
+            <label className="form-label">期待出力</label>
             <textarea
               className="form-textarea"
               placeholder="期待される出力を入力"
@@ -161,10 +178,14 @@ const AdminCreateTestCase: React.FC = () => {
               onChange={(e) => setExpected(e.target.value)}
               disabled={loading}
               rows={3}
+              aria-invalid={!expectedValid}
+              aria-describedby="tc-expected-help"
             />
+            <span id="tc-expected-help" className="help-text">空欄にしないでください</span>
+            {!expectedValid && <div className="message message-error" style={{ marginTop: '.5rem' }}>期待出力は必須です</div>}
           </div>
           <div className="form-group">
-            <label className="form-label">💬 コメント（オプション）</label>
+            <label className="form-label">コメント（オプション）</label>
             <textarea
               className="form-textarea"
               placeholder="コメントを入力"
@@ -177,10 +198,10 @@ const AdminCreateTestCase: React.FC = () => {
           <button
             className="btn btn-primary"
             onClick={handleAdd}
-            disabled={loading}
+            disabled={loading || !inputValid || !expectedValid}
             style={{ width: "100%" }}
           >
-            {loading ? "追加中..." : "➕ テストケースを追加"}
+            {loading ? "追加中..." : "テストケースを追加"}
           </button>
         </div>
       </div>
@@ -189,15 +210,14 @@ const AdminCreateTestCase: React.FC = () => {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))", gap: "1.5rem" }}>
         {testcases.length === 0 ? (
           <div className="card" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "2rem" }}>
-            <p style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🧪</p>
-            <p style={{ color: "var(--text-secondary)" }}>テストケースがありません</p>
+            <EmptyState title="テストケースがありません" />
           </div>
         ) : (
           testcases.map((tc) => (
             <div key={tc.id} className="card">
               <div className="form-section">
                 <div className="form-group">
-                  <label className="form-label">📥 入力</label>
+                  <label className="form-label">入力</label>
                   <textarea
                     className="form-textarea"
                     value={tc.input}
@@ -206,7 +226,7 @@ const AdminCreateTestCase: React.FC = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">✅ 期待出力</label>
+                  <label className="form-label">期待出力</label>
                   <textarea
                     className="form-textarea"
                     value={tc.expected_output}
@@ -215,7 +235,7 @@ const AdminCreateTestCase: React.FC = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">💬 コメント</label>
+                  <label className="form-label">コメント</label>
                   <textarea
                     className="form-textarea"
                     value={tc.comment}
