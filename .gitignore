@@ -44,5 +44,6 @@ logs/
 
 .git/
 
+./frontend/img/
 
 .env
