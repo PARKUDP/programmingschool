@@ -44,6 +44,12 @@ logs/
 
 .git/
 
-./frontend/img/
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/img/
+frontend/.env.local
+frontend/.env.*.local
 
 .env
