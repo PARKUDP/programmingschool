@@ -1,0 +1,34 @@
+# 本番環境用 Docker Compose 設定
+# 使用方法:
+# docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  db:
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=${ROOT_PASSWORD:-rootpassword123}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-changeme123}
+    ports:
+      - "127.0.0.1:3306:3306"  # localhost のみ
+
+  backend:
+    restart: always
+    ports:
+      - "80:80"   # HTTP - 本番
+    environment:
+      - DB_PASSWORD=${DB_PASSWORD:-changeme123}
+      - JWT_SECRET=${JWT_SECRET:-change-this-in-production}
+      - PHP_MEMORY_LIMIT=512M
+      - PHP_MAX_EXECUTION_TIME=60
+    labels:
+      - "com.example.description=Production Backend"
+
+  frontend:
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_BASE_URL=https://${DOMAIN:-parkudp.me}

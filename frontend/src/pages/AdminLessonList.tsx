@@ -121,6 +121,15 @@ const AdminLessonList: React.FC = () => {
         <p className="page-subtitle">レッスンを管理します</p>
       </div>
 
+      {/* 戻るボタン */}
+      <button
+        className="btn btn-secondary"
+        onClick={() => navigate("/admin/materials")}
+        style={{ marginBottom: "1rem" }}
+      >
+        ← 教材一覧に戻る
+      </button>
+
       {message && <div className="message message-success">{message}</div>}
       {error && <div className="message message-error">{error}</div>}
 
@@ -176,7 +185,7 @@ const AdminLessonList: React.FC = () => {
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 <button
                   className="btn btn-primary"
-                  onClick={() => navigate(`/admin/assignments/create?lesson_id=${lesson.id}`)}
+                  onClick={() => navigate(`/admin/assignments/create?material_id=${materialId}&lesson_id=${lesson.id}`)}
                   style={{ flex: 1 }}
                 >
                   宿題作成

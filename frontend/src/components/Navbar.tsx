@@ -20,7 +20,7 @@ const Navbar: React.FC = () => {
   return (
     <nav className="navbar">
       <div className="navbar-container">
-        <Link to={user.is_admin ? "/admin/dashboard" : "/dashboard"} className="navbar-brand" title="ホームへ">
+        <Link to={(user.is_admin || user.role === "teacher") ? "/admin/dashboard" : "/dashboard"} className="navbar-brand" title="ホームへ">
           <img src="/img/logo_image_01.svg" alt="Kidz8" style={{ height: "40px" }} />
         </Link>
         
@@ -55,7 +55,7 @@ const Navbar: React.FC = () => {
               </>
             ) : user.role === "teacher" ? (
               <>
-                <Link to="/dashboard" className="nav-link" title="ダッシュボード">
+                <Link to="/admin/dashboard" className="nav-link" title="ダッシュボード">
                   ダッシュボード
                 </Link>
                 <Link to="/admin/materials" className="nav-link" title="教材管理">
@@ -67,11 +67,8 @@ const Navbar: React.FC = () => {
                 <Link to="/admin/grading" className="nav-link" title="採点">
                   採点
                 </Link>
-                <Link to="/" className="nav-link" title="生徒管理">
-                  生徒管理
-                </Link>
-                <Link to="/submissions" className="nav-link" title="提出物確認">
-                  提出物確認
+                <Link to="/admin/users" className="nav-link" title="ユーザー・クラス管理">
+                  ユーザー・クラス管理
                 </Link>
               </>
             ) : (

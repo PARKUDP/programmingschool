@@ -116,6 +116,9 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS assignment (
     input_example TEXT,
     expected_output TEXT,
     file_path TEXT,
+    problem_type TEXT DEFAULT 'code' CHECK (problem_type IN ('choice','essay','code')),
+    exec_mode TEXT DEFAULT 'stdin' CHECK (exec_mode IN ('stdin','function')),
+    entry_function TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(lesson_id) REFERENCES lesson(id) ON DELETE CASCADE
 );");
@@ -126,13 +129,33 @@ $colNames = array_column($cols, 'name');
 if (!in_array('expected_output', $colNames)) {
     $pdo->exec('ALTER TABLE assignment ADD COLUMN expected_output TEXT');
 };
+if (!in_array('problem_type', $colNames)) {
+    $pdo->exec("ALTER TABLE assignment ADD COLUMN problem_type TEXT DEFAULT 'code'");
+}
+if (!in_array('exec_mode', $colNames)) {
+    $pdo->exec("ALTER TABLE assignment ADD COLUMN exec_mode TEXT DEFAULT 'stdin'");
+}
+if (!in_array('entry_function', $colNames)) {
+    $pdo->exec('ALTER TABLE assignment ADD COLUMN entry_function TEXT');
+}
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS test_case (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assignment_id INTEGER NOT NULL,
     input TEXT,
     expected_output TEXT,
+    args_json TEXT,
     comment TEXT,
+    FOREIGN KEY(assignment_id) REFERENCES assignment(id) ON DELETE CASCADE
+);");
+
+// 宿題ごとの選択肢（assignment 単位の choice 用）
+$pdo->exec("CREATE TABLE IF NOT EXISTS choice_option (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignment_id INTEGER NOT NULL,
+    option_text TEXT NOT NULL,
+    option_order INTEGER DEFAULT 0,
+    is_correct INTEGER DEFAULT 0,
     FOREIGN KEY(assignment_id) REFERENCES assignment(id) ON DELETE CASCADE
 );");
 
@@ -163,30 +186,57 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS assignment_target (
     FOREIGN KEY(assignment_id) REFERENCES assignment(id) ON DELETE CASCADE
 );");
 
+// マイグレーション: 配布対象に管理者・先生が残っている古いデータをクリーンアップ
+$pdo->exec("DELETE FROM assignment_target WHERE target_type='user' AND target_id IN (
+    SELECT id FROM user WHERE (role IS NOT NULL AND role != 'student') OR is_admin = 1
+)");
+
 // マイグレーション：既存DBに comment カラムを追加
 $cols = $pdo->query('PRAGMA table_info(test_case)')->fetchAll(PDO::FETCH_ASSOC);
 $hasComment = false;
+$hasArgs = false;
 foreach ($cols as $c) {
     if ($c['name'] === 'comment') {
         $hasComment = true;
-        break;
+    }
+    if ($c['name'] === 'args_json') {
+        $hasArgs = true;
     }
 }
 if (!$hasComment) {
     $pdo->exec('ALTER TABLE test_case ADD COLUMN comment TEXT');
+}
+if (!$hasArgs) {
+    $pdo->exec('ALTER TABLE test_case ADD COLUMN args_json TEXT');
 }
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS submission (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     assignment_id INTEGER NOT NULL,
+    problem_type TEXT,
     code TEXT,
+    answer_text TEXT,
+    selected_choice_id INTEGER,
     is_correct INTEGER,
     feedback TEXT,
     submitted_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE,
     FOREIGN KEY(assignment_id) REFERENCES assignment(id) ON DELETE CASCADE
 );");
+
+// マイグレーション：submission に新カラムを追加
+$subCols = $pdo->query('PRAGMA table_info(submission)')->fetchAll(PDO::FETCH_ASSOC);
+$subNames = array_column($subCols, 'name');
+if (!in_array('problem_type', $subNames)) {
+    $pdo->exec('ALTER TABLE submission ADD COLUMN problem_type TEXT');
+}
+if (!in_array('answer_text', $subNames)) {
+    $pdo->exec('ALTER TABLE submission ADD COLUMN answer_text TEXT');
+}
+if (!in_array('selected_choice_id', $subNames)) {
+    $pdo->exec('ALTER TABLE submission ADD COLUMN selected_choice_id INTEGER');
+}
 
 // 管理者ユーザー追加（初期値 admin）
 $adminHash = password_hash('admin', PASSWORD_DEFAULT);

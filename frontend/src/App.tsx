@@ -1,7 +1,6 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import ProblemList from "./pages/ProblemList";
-import ProblemDetail from "./pages/ProblemDetail";
 import ProblemSolve from "./pages/ProblemSolve";
 import SubmissionHistory from "./pages/SubmissionHistory";
 import Login from "./pages/Login";
@@ -36,11 +35,11 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route
             path="/"
-            element={user ? <ProblemList /> : <Navigate to="/login" />}
+            element={user ? ((user.is_admin || user.role === "teacher") ? <Navigate to="/admin/dashboard" /> : <ProblemList />) : <Navigate to="/login" />}
           />
           <Route
-            path="/assignments/:id"
-            element={user ? <ProblemDetail /> : <Navigate to="/login" />}
+            path="/assignments/:assignmentId"
+            element={user ? <ProblemSolve /> : <Navigate to="/login" />}
           />
           <Route
             path="/submissions"
@@ -48,11 +47,11 @@ function App() {
           />
           <Route
             path="/dashboard"
-            element={user ? <StudentDashboard /> : <Navigate to="/login" />}
+            element={user ? ((user.is_admin || user.role === "teacher") ? <Navigate to="/admin/dashboard" /> : <StudentDashboard />) : <Navigate to="/login" />}
           />
           <Route
             path="/admin/dashboard"
-            element={user && user.is_admin ? <AdminDashboard /> : <Navigate to="/login" />}
+            element={user && (user.is_admin || user.role === "teacher") ? <AdminDashboard /> : <Navigate to="/login" />}
           />
           <Route
             path="/assignments"
@@ -60,6 +59,10 @@ function App() {
           />
           <Route
             path="/admin/assignments/create"
+            element={user && (user.is_admin || user.role === "teacher") ? <AdminCreateAssignment /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/admin/assignments/:assignmentId/edit"
             element={user && (user.is_admin || user.role === "teacher") ? <AdminCreateAssignment /> : <Navigate to="/login" />}
           />
           <Route
@@ -104,11 +107,11 @@ function App() {
           />
           <Route
             path="/admin/users"
-            element={user && user.is_admin ? <AdminUserManagement /> : <Navigate to="/login" />}
+            element={user && (user.is_admin || user.role === "teacher") ? <AdminUserManagement /> : <Navigate to="/login" />}
           />
           <Route
             path="/admin/classes"
-            element={user && user.is_admin ? <AdminUserManagement /> : <Navigate to="/login" />}
+            element={user && (user.is_admin || user.role === "teacher") ? <AdminUserManagement /> : <Navigate to="/login" />}
           />
           <Route
             path="/admin/assignments/:assignmentId/manage"

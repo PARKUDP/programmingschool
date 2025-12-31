@@ -26,10 +26,12 @@ const AdminAssignmentUnassign: React.FC = () => {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const { authFetch, user } = useAuth();
+  const isStaff = user?.is_admin || user?.role === "teacher";
 
   useEffect(() => {
+    if (!isStaff) return;
     fetchAssignedAssignments();
-  }, [authFetch]);
+  }, [authFetch, isStaff]);
 
   const fetchAssignedAssignments = async () => {
     try {
@@ -78,7 +80,7 @@ const AdminAssignmentUnassign: React.FC = () => {
     return grouped;
   }, [assigned]);
 
-  if (!user?.is_admin) {
+  if (!isStaff) {
     return (
       <div className="page-container">
         <p className="message message-error">権限がありません</p>

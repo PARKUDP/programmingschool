@@ -13,10 +13,12 @@ const AdminMaterialList: React.FC = () => {
   const [editModal, setEditModal] = useState<{ isOpen: boolean; id: number | null; title: string; description: string }>({ isOpen: false, id: null, title: "", description: "" });
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
+  const isStaff = user?.is_admin || user?.role === "teacher";
 
   useEffect(() => {
+    if (!isStaff) return;
     fetchMaterials();
-  }, [authFetch]);
+  }, [authFetch, isStaff]);
 
   const fetchMaterials = async () => {
     try {
@@ -89,7 +91,7 @@ const AdminMaterialList: React.FC = () => {
     }
   };
 
-  if (!user?.is_admin) return (
+  if (!isStaff) return (
     <div className="page-container">
       <p className="message message-error">権限がありません</p>
     </div>

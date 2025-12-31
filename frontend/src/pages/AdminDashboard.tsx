@@ -22,6 +22,7 @@ interface ProgressData {
   total_assignments: number;
   correct: number;
   incorrect: number;
+  pending: number;
   unsubmitted: number;
   daily_counts: DailyCount[];
   material_progress: MaterialProgress[];
@@ -57,15 +58,17 @@ const AdminDashboard: React.FC = () => {
   const [classProgress, setClassProgress] = useState<Array<{class_id:number; name:string; members:number; submissions:number; correct:number; accuracy:number}>>([]);
   const [adminMessage, setAdminMessage] = useState<string>("");
   const [adminError, setAdminError] = useState<string>("");
-  const [unassignedUsers, setUnassignedUsers] = useState<Array<{id:number; username:string; is_admin?:number}>>([]);
-  const [classUsers, setClassUsers] = useState<Array<{id:number; username:string; is_admin?:number}>>([]);
-  const [allUsers, setAllUsers] = useState<Array<{id:number; username:string; class_name?: string}>>([]);
+  const [unassignedUsers, setUnassignedUsers] = useState<Array<{id:number; username:string; is_admin?:number; role?: "student" | "teacher" | "admin"}>>([]);
+  const [classUsers, setClassUsers] = useState<Array<{id:number; username:string; is_admin?:number; role?: "student" | "teacher" | "admin"}>>([]);
+  const [allUsers, setAllUsers] = useState<Array<{id:number; username:string; class_name?: string; role?: "student" | "teacher" | "admin"; is_admin?: number}>>([]);
   const [selectedUser, setSelectedUser] = useState<{id:number; username:string} | null>(null);
   const [selectedUserMaterials, setSelectedUserMaterials] = useState<MaterialProgressDetail[]>([]);
   const [selectedUserData, setSelectedUserData] = useState<ProgressData | null>(null);
   const [filterUserId, setFilterUserId] = useState<number | "">("");
   const [loading, setLoading] = useState(true);
   const [showResetDialog, setShowResetDialog] = useState(false);
+
+  const isStudent = (u: { role?: string; is_admin?: number | boolean }) => (u.role ? u.role === "student" : !u.is_admin);
 
   useEffect(() => {
     setLoading(true);
@@ -87,10 +90,10 @@ const AdminDashboard: React.FC = () => {
         .then((d) => setClassProgress(d || [])),
       authFetch(apiEndpoints.classesUnassigned)
         .then((res) => res.json())
-        .then((d) => setUnassignedUsers(d || [])),
+        .then((d) => setUnassignedUsers((d || []).filter((u: any) => isStudent(u)))),
       authFetch(`${API_BASE_URL}/api/users`)
         .then((res) => res.json())
-        .then((d) => setAllUsers(d || [])),
+        .then((d) => setAllUsers((d || []).filter((u: any) => isStudent(u)))),
     ]).finally(() => setLoading(false));
   }, [authFetch]);
 
@@ -112,7 +115,7 @@ const AdminDashboard: React.FC = () => {
         .then((d) => setUserProgress(d || []));
       authFetch(`${apiEndpoints.classes}/${selectedClass}/users`)
         .then((res) => res.json())
-        .then((d) => setClassUsers(d || []));
+        .then((d) => setClassUsers((d || []).filter((u: any) => isStudent(u))));
       setSelectedUser(null);
       setSelectedUserMaterials([]);
       setSelectedUserData(null);
@@ -200,10 +203,11 @@ const AdminDashboard: React.FC = () => {
   const pieData = [
     { name: "正解", value: displayData.correct },
     { name: "不正解", value: displayData.incorrect },
+    { name: "採点待ち", value: displayData.pending },
     { name: "未提出", value: displayData.unsubmitted },
   ];
 
-  const colors = ["#82ca9d", "#8884d8", "#ccc"];
+  const colors = ["#82ca9d", "#ef4444", "#f59e0b", "#ccc"];
 
   return (
     <div className="page-container">
@@ -345,6 +349,7 @@ const AdminDashboard: React.FC = () => {
               <Legend wrapperStyle={{ fontSize: '13px', color: '#6b7280' }} />
               <Bar dataKey="correct" stackId="a" fill="#82ca9d" name="正解" />
               <Bar dataKey="incorrect" stackId="a" fill="#f87171" name="不正解" />
+              <Bar dataKey="pending" stackId="a" fill="#f59e0b" name="採点待ち" />
             </BarChart>
           </div>
         </div>

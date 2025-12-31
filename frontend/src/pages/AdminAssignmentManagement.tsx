@@ -22,6 +22,8 @@ interface ClassItem {
 interface UserItem {
   id: number;
   username: string;
+  role?: "student" | "teacher" | "admin";
+  is_admin?: number;
 }
 
 interface Target {
@@ -34,6 +36,7 @@ const AdminAssignmentManagement: React.FC = () => {
   const navigate = useNavigate();
   const { user, authFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const isStaff = user?.is_admin || user?.role === "teacher";
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
@@ -43,9 +46,9 @@ const AdminAssignmentManagement: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   useEffect(() => {
-    if (!user?.is_admin || !assignmentId) return;
+    if (!isStaff || !assignmentId) return;
     loadData();
-  }, [user, assignmentId]);
+  }, [isStaff, assignmentId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -63,10 +66,12 @@ const AdminAssignmentManagement: React.FC = () => {
         tRes.json(),
       ]);
       
+      const isStudent = (u: UserItem) => (u.role ? u.role === "student" : !u.is_admin);
+
       const foundAssignment = (aData || []).find((a: Assignment) => a.id === Number(assignmentId));
       setAssignment(foundAssignment || null);
       setClasses(cData || []);
-      setUsers(uData || []);
+      setUsers((uData || []).filter((u: UserItem) => isStudent(u)));
       
       const targets: Target[] = tData.targets || [];
       if (targets.length === 0 || targets[0].target_type === "all") {
@@ -106,7 +111,7 @@ const AdminAssignmentManagement: React.FC = () => {
     }
   };
 
-  if (!user?.is_admin) {
+  if (!isStaff) {
     return (
       <div className="page-container">
         <p className="message message-error">権限がありません</p>

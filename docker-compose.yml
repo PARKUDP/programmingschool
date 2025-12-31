@@ -1,20 +1,94 @@
 services:
+  db:
+    image: mysql:8.0
+    container_name: programmingschool_mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?set in .env}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-programmingschool}
+      - MYSQL_USER=${MYSQL_USER:-appuser}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?set in .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: [
+      '--default-authentication-plugin=mysql_native_password',
+      '--character-set-server=utf8mb4',
+      '--collation-server=utf8mb4_unicode_ci',
+      '--max_connections=500',
+      '--innodb_buffer_pool_size=512M',
+      '--innodb_flush_log_at_trx_commit=2',
+      '--innodb_flush_method=O_DIRECT',
+      '--innodb_log_file_size=256M'
+    ]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      timeout: 5s
+      retries: 10
+      interval: 10s
+
   backend:
     build: ./backend
-    ports:
-      - "5050:80"
+    container_name: programmingschool_backend
+    restart: unless-stopped
+    expose:
+      - "80"
     volumes:
       - ./backend:/var/www/html
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
+      - DB_TYPE=${DB_TYPE:-mysql}
+      - DB_HOST=${DB_HOST:-db}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-programmingschool}
+      - DB_USER=${DB_USER:-appuser}
+      - DB_PASSWORD=${DB_PASSWORD:?set in .env}
+      - JWT_SECRET=${JWT_SECRET:?set in .env}
+      - PHP_MEMORY_LIMIT=256M
+      - PHP_MAX_EXECUTION_TIME=60
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     build:
       context: ./frontend
-    ports:
-      - "3000:3000"
+    container_name: programmingschool_frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
       - NODE_OPTIONS=--openssl-legacy-provider
+
+  caddy:
+    image: caddy:2
+    container_name: programmingschool_caddy
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data:/data
+      - ./caddy-config:/config
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: programmingschool_cloudflared
+    command: tunnel --no-autoupdate run
+    restart: unless-stopped
+    volumes:
+      - ./cloudflared:/etc/cloudflared
+    depends_on:
+      - caddy
+
+volumes:
+  mysql_data:

@@ -23,6 +23,8 @@ interface UserItem {
 const AdminUserManagement: React.FC = () => {
   const { user, authFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
+  const isStaff = user?.is_admin || user?.role === "teacher";
+  const canDeleteUsers = user?.is_admin;
 
   // State
   const [activeTab, setActiveTab] = useState<"users" | "classes">("users");
@@ -31,9 +33,11 @@ const AdminUserManagement: React.FC = () => {
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [members, setMembers] = useState<UserItem[]>([]);
   
-  // Create class form
+  // Create/edit class form
   const [newClassName, setNewClassName] = useState("");
   const [newClassDesc, setNewClassDesc] = useState("");
+  const [editClassName, setEditClassName] = useState("");
+  const [editClassDesc, setEditClassDesc] = useState("");
   
   // Add members to class
   const [selectToAdd, setSelectToAdd] = useState<number[]>([]);
@@ -52,9 +56,21 @@ const AdminUserManagement: React.FC = () => {
   }>({ isOpen: false, type: null, id: null });
 
   useEffect(() => {
-    if (!user?.is_admin) return;
+    if (!isStaff) return;
     loadData();
-  }, [user]);
+  }, [isStaff]);
+
+  // reflect selected class into edit fields
+  useEffect(() => {
+    if (!selectedClass) {
+      setEditClassName("");
+      setEditClassDesc("");
+      return;
+    }
+    const found = classes.find(c => c.id === selectedClass);
+    setEditClassName(found?.name || "");
+    setEditClassDesc(found?.description || "");
+  }, [selectedClass, classes]);
 
   const loadData = async () => {
     setLoading(true);
@@ -86,20 +102,23 @@ const AdminUserManagement: React.FC = () => {
 
   // Load members when selected class changes
   useEffect(() => {
-    if (!selectedClass) {
+    if (!isStaff || !selectedClass) {
       setMembers([]);
       return;
     }
+    const isStudent = (u: UserItem) => (u.role ? u.role === "student" : !u.is_admin);
     authFetch(`${apiEndpoints.classes}/${selectedClass}/users`)
       .then(res => res.json())
-      .then((data: UserItem[]) => setMembers(Array.isArray(data) ? data : data.users || []))
+      .then((data: UserItem[]) => setMembers((Array.isArray(data) ? data : data.users || []).filter((u: UserItem) => isStudent(u))))
       .catch(() => setMembers([]));
-  }, [selectedClass, authFetch]);
+  }, [selectedClass, authFetch, isStaff]);
 
   // Non-members for adding (users not already in the selected class)
   const nonMembers = useMemo(() => {
     const memberIds = new Set(members.map(m => m.id));
+    const isStudent = (u: UserItem) => (u.role ? u.role === "student" : !u.is_admin);
     return allUsers.filter(u => 
+      isStudent(u) &&
       !memberIds.has(u.id) && 
       !u.class_name // 他のクラスに所属していない
     );
@@ -137,6 +156,27 @@ const AdminUserManagement: React.FC = () => {
     }
   };
 
+  const handleUpdateClass = async () => {
+    if (!selectedClass) return;
+    if (!editClassName.trim()) { setError("クラス名を入力してください"); return; }
+    try {
+      const res = await authFetch(`${apiEndpoints.classes}/${selectedClass}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editClassName.trim(), description: editClassDesc }),
+      });
+      if (!res.ok) throw new Error("更新に失敗しました");
+      setMessage("クラスを更新しました");
+      showSnackbar("クラスを更新しました", "success");
+      const current = selectedClass;
+      await loadData();
+      if (current) setSelectedClass(current);
+    } catch (e: any) {
+      setError(e.message || "更新に失敗しました");
+      showSnackbar("更新に失敗しました", "error");
+    }
+  };
+
   const handleAddMembers = async () => {
     if (!selectedClass || selectToAdd.length === 0) return;
     
@@ -159,10 +199,7 @@ const AdminUserManagement: React.FC = () => {
       setMembers(Array.isArray(newMembers) ? newMembers : newMembers.users || []);
       
       // allUsers を更新して、追加したユーザーに class_name を反映させる
-      // クラス情報を取得
-      const classRes = await authFetch(`${apiEndpoints.classes}/${selectedClass}`);
-      const classData = await classRes.json();
-      const className = classData.name;
+      const className = classes.find(c => c.id === selectedClass)?.name || "";
       
       setAllUsers(allUsers.map(u => 
         selectToAdd.includes(u.id) ? { ...u, class_name: className } : u
@@ -202,6 +239,11 @@ const AdminUserManagement: React.FC = () => {
   };
 
   const handleDeleteUser = (uid: number, username: string) => {
+    if (!canDeleteUsers) {
+      setError("ユーザー削除は管理者のみ可能です");
+      showSnackbar("ユーザー削除は管理者のみ可能です", "error");
+      return;
+    }
     if (uid === user?.id) {
       setError("自分自身は削除できません");
       return;
@@ -223,6 +265,11 @@ const AdminUserManagement: React.FC = () => {
         setSelectedClass(null);
         await loadData();
       } else if (type === "deleteUser") {
+        if (!canDeleteUsers) {
+          setError("ユーザー削除は管理者のみ可能です");
+          showSnackbar("ユーザー削除は管理者のみ可能です", "error");
+          return;
+        }
         const res = await authFetch(`${apiEndpoints.users}/${id}`, { method: "DELETE" });
         if (!res.ok) throw new Error("削除に失敗しました");
         setAllUsers(prev => prev.filter(u => u.id !== id));
@@ -241,7 +288,7 @@ const AdminUserManagement: React.FC = () => {
     return "生徒";
   };
 
-  if (!user?.is_admin) {
+  if (!isStaff) {
     return (
       <div className="page-container">
         <p className="message message-error">権限がありません</p>
@@ -341,8 +388,14 @@ const AdminUserManagement: React.FC = () => {
                       <button
                         className="btn btn-danger"
                         onClick={() => handleDeleteUser(u.id, u.username)}
-                        disabled={u.id === user.id}
-                        title={u.id === user.id ? "自分自身は削除できません" : ""}
+                        disabled={u.id === user.id || !canDeleteUsers}
+                        title={
+                          !canDeleteUsers
+                            ? "ユーザー削除は管理者のみ可能です"
+                            : u.id === user.id
+                              ? "自分自身は削除できません"
+                              : ""
+                        }
                         style={{ fontSize: "0.85rem", padding: "0.4rem 1rem" }}
                       >
                         削除
@@ -436,15 +489,43 @@ const AdminUserManagement: React.FC = () => {
           {/* 中央・右パネル: クラス詳細 */}
           {selectedClass ? (
             <div className="card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-                <h3 style={{ fontSize: "1.2rem" }}>{classes.find(c => c.id === selectedClass)?.name}</h3>
-                <button
-                  className="btn btn-danger"
-                  onClick={() => handleDeleteClass(selectedClass, classes.find(c => c.id === selectedClass)?.name || "")}
-                  style={{ fontSize: "0.85rem", padding: "0.4rem 1rem" }}
-                >
-                  クラス削除
-                </button>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "1rem", marginBottom: "1.25rem" }}>
+                <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div>
+                    <label className="form-label">クラス名</label>
+                    <input
+                      className="form-input"
+                      value={editClassName}
+                      onChange={(e) => setEditClassName(e.target.value)}
+                      placeholder="クラス名"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">説明（任意）</label>
+                    <input
+                      className="form-input"
+                      value={editClassDesc}
+                      onChange={(e) => setEditClassDesc(e.target.value)}
+                      placeholder="説明を入力"
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={handleUpdateClass}
+                    style={{ fontSize: "0.85rem", padding: "0.4rem 0.9rem", whiteSpace: "nowrap" }}
+                  >
+                    更新
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => handleDeleteClass(selectedClass, classes.find(c => c.id === selectedClass)?.name || "")}
+                    style={{ fontSize: "0.85rem", padding: "0.4rem 0.9rem", whiteSpace: "nowrap" }}
+                  >
+                    クラス削除
+                  </button>
+                </div>
               </div>
 
               {/* メンバー一覧 */}

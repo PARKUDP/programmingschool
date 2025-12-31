@@ -6,5 +6,6 @@ export default defineConfig({
   server: {
     host: true,
     port: 3000,
+    allowedHosts: ['school.parkudp.me', 'localhost'],
   },
 });

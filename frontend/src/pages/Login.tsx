@@ -55,7 +55,8 @@ const Login: React.FC = () => {
         data.token
       );
       const role = data.role || (data.is_admin ? "admin" : "student");
-      navigate(role === "admin" ? "/admin/dashboard" : "/dashboard");
+      const isPrivileged = role === "admin" || role === "teacher" || data.is_admin;
+      navigate(isPrivileged ? "/admin/dashboard" : "/dashboard");
     } catch (err: any) {
       setError(
         err.message || "ログインに失敗しました。ユーザー名またはパスワードを確認してください。"

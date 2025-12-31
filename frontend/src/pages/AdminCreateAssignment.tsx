@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { apiEndpoints } from "../config/api";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import { useSnackbar } from "../components/SnackbarContext";
 
 interface Lesson { id: number; title: string; material_id: number; }
 interface Material { id: number; title: string; }
-interface UserItem { id: number; username: string; is_admin?: number }
+interface UserItem { id: number; username: string; is_admin?: number; role?: "student" | "teacher" | "admin" }
 interface ClassItem { id: number; name: string }
 interface Problem { id: number; title: string; type: string; }
 
@@ -16,12 +16,15 @@ const AdminCreateAssignment: React.FC = () => {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [selectedMaterial, setSelectedMaterial] = useState<number | "">(() => {
-    const materialId = Number(new URLSearchParams(window.location.search).get("material_id"));
+    const params = new URLSearchParams(window.location.search);
+    const materialId = Number(params.get("material_id"));
     return materialId ? materialId : "";
   });
-  const [lessonId, setLessonId] = useState<number | "">(
-    Number(new URLSearchParams(window.location.search).get("lesson_id")) || ""
-  );
+  const [lessonId, setLessonId] = useState<number | "">(() => {
+    const params = new URLSearchParams(window.location.search);
+    const lessonIdParam = Number(params.get("lesson_id"));
+    return lessonIdParam ? lessonIdParam : "";
+  });
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [questionText, setQuestionText] = useState("");
@@ -32,9 +35,15 @@ const AdminCreateAssignment: React.FC = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [problemType, setProblemType] = useState<"choice" | "essay" | "code">("choice");
+  const [choiceOptions, setChoiceOptions] = useState<string[]>(["", ""]);
+  const [correctAnswerIndex, setCorrectAnswerIndex] = useState<number>(0);
   const { user, authFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
   const navigate = useNavigate();
+  const { assignmentId } = useParams<{ assignmentId: string }>();
+  const isEditMode = Boolean(assignmentId);
+  const [assignmentLoaded, setAssignmentLoaded] = useState(false);
   const [targetType, setTargetType] = useState<'all'|'users'|'classes'>('all');
   const [users, setUsers] = useState<UserItem[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -47,7 +56,9 @@ const AdminCreateAssignment: React.FC = () => {
   const [titleTouched, setTitleTouched] = useState(false);
   const [questionTouched, setQuestionTouched] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+
   useEffect(() => {
+    const isStudent = (u: UserItem) => (u.role ? u.role === "student" : !u.is_admin);
     // 教材とレッスンを並行取得
     Promise.all([
       authFetch(apiEndpoints.materials).then(res => res.json()),
@@ -61,7 +72,7 @@ const AdminCreateAssignment: React.FC = () => {
     // 管理用データ取得（失敗しても致命的ではないため握りつぶす）
     authFetch(apiEndpoints.users)
       .then(res => res.ok ? res.json() : [])
-      .then(data => setUsers(Array.isArray(data) ? data : []))
+      .then(data => setUsers((Array.isArray(data) ? data : []).filter((u: UserItem) => isStudent(u))))
       .catch(() => {});
     authFetch(apiEndpoints.classes)
       .then(res => res.ok ? res.json() : [])
@@ -84,7 +95,54 @@ const AdminCreateAssignment: React.FC = () => {
       .catch(() => setProblems([]));
   }, [lessonId, authFetch]);
 
-  if (!user?.is_admin) return (
+  // 編集時に既存データを読み込む
+  useEffect(() => {
+    if (!isEditMode || !assignmentId || lessons.length === 0) return;
+
+    const load = async () => {
+      try {
+        const res = await authFetch(`${apiEndpoints.assignments}/${assignmentId}`);
+        if (!res.ok) throw new Error("宿題の取得に失敗しました");
+        const data = await res.json();
+        setTitle(data.title || "");
+        setDescription(data.description || "");
+        setQuestionText(data.question_text || "");
+        setLessonId(data.lesson_id || "");
+        const lesson = lessons.find(l => l.id === data.lesson_id);
+        if (lesson) setSelectedMaterial(lesson.material_id);
+        setProblemType((data.problem_type as any) || "choice");
+        setInputExample(data.input_example || "");
+        setExpectedOutput(data.expected_output || "");
+
+        if (data.problem_type === "choice") {
+          const choicesRes = await authFetch(`${apiEndpoints.assignments}/${assignmentId}/choices`);
+          if (choicesRes.ok) {
+            const cdata = await choicesRes.json();
+            const opts = Array.isArray(cdata) ? cdata : cdata.choices || [];
+            setChoiceOptions(opts.length ? opts.map((c: any) => c.option_text) : ["", ""]);
+            const correctIdx = opts.findIndex((c: any) => c.is_correct === 1);
+            setCorrectAnswerIndex(correctIdx >= 0 ? correctIdx : 0);
+          }
+        }
+        setAssignmentLoaded(true);
+      } catch (err: any) {
+        setError(err.message || "宿題の読み込みに失敗しました");
+      }
+    };
+
+    load();
+  }, [isEditMode, assignmentId, lessons, authFetch]);
+
+  // 選択肢を削除した場合に正解インデックスが範囲外にならないよう調整
+  useEffect(() => {
+    if (correctAnswerIndex >= choiceOptions.length) {
+      setCorrectAnswerIndex(0);
+    }
+  }, [correctAnswerIndex, choiceOptions.length]);
+
+  const isStaff = user?.is_admin || user?.role === "teacher";
+
+  if (!isStaff) return (
     <div className="page-container">
       <p className="message message-error">権限がありません</p>
     </div>
@@ -99,47 +157,102 @@ const AdminCreateAssignment: React.FC = () => {
     if (!titleValid) { setError("タイトルを入力してください"); return; }
     if (!questionValid) { setError("問題文を入力してください"); return; }
 
+    // 選択式の場合は選択肢を検証
+    if (problemType === "choice") {
+      const trimmedChoices = choiceOptions.map(opt => opt.trim());
+      const validChoices = trimmedChoices.filter(opt => opt.length > 0);
+      if (validChoices.length < 2) {
+        setError("選択肢は最低2つ以上入力してください");
+        return;
+      }
+      if (validChoices.length !== trimmedChoices.length) {
+        setError("すべての選択肢を入力してください");
+        return;
+      }
+    }
+
     setError("");
     setMessage("");
     setLoading(true);
 
     try {
-      const form = new FormData();
-      form.append("lesson_id", String(lessonId));
-      form.append("title", title);
-      form.append("description", description);
-      form.append("question_text", questionText);
-      form.append("input_example", inputExample);
-      form.append("expected_output", expectedOutput);
-      if (file) form.append("file", file);
-      form.append("target_type", targetType === 'users' ? 'users' : targetType === 'classes' ? 'classes' : 'all');
-      const ids = targetType === 'users' ? selectedUsers : targetType === 'classes' ? selectedClasses : [];
-      form.append("target_ids", JSON.stringify(ids));
+      if (isEditMode && assignmentId) {
+        const payload: any = {
+          lesson_id: lessonId,
+          title,
+          description,
+          question_text: questionText,
+          problem_type: problemType,
+          input_example: problemType === "code" ? inputExample : undefined,
+          expected_output: (problemType === "essay" || problemType === "code") ? expectedOutput : undefined,
+        };
 
-      const res = await authFetch(apiEndpoints.assignments, {
-        method: "POST",
-        body: form,
-      });
-      
-      if (!res.ok) throw new Error("作成失敗");
-      const data = await res.json();
-      
-      setMessage("宿題を作成しました");
-      showSnackbar("宿題を作成しました", "success");
-      setTimeout(() => {
-        navigate("/admin/assignments");
-      }, 1500);
-      
-      setTitle("");
-      setDescription("");
-      setQuestionText("");
-      setInputExample("");
-      setExpectedOutput("");
-      setLessonId("");
-      setFile(null);
+        if (problemType === "choice") {
+          payload.choices = choiceOptions.map(opt => opt.trim());
+          payload.correct_answer_index = correctAnswerIndex;
+        }
+
+        const res = await authFetch(`${apiEndpoints.assignments}/${assignmentId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) throw new Error("更新に失敗しました");
+        setMessage("宿題を更新しました");
+        showSnackbar("宿題を更新しました", "success");
+      } else {
+        const form = new FormData();
+        form.append("lesson_id", String(lessonId));
+        form.append("title", title);
+        form.append("description", description);
+        form.append("question_text", questionText);
+        form.append("problem_type", problemType);
+
+        if (problemType === "choice") {
+          const trimmedChoices = choiceOptions.map(opt => opt.trim());
+          const normalizedIndex = Math.min(Math.max(correctAnswerIndex, 0), trimmedChoices.length - 1);
+          form.append("choices", JSON.stringify(trimmedChoices));
+          form.append("correct_answer_index", String(normalizedIndex));
+        }
+
+        if (problemType === "essay" || problemType === "code") {
+          form.append("expected_output", expectedOutput);
+        }
+
+        if (problemType === "code") {
+          form.append("input_example", inputExample);
+        }
+
+        if (file) form.append("file", file);
+        form.append("target_type", targetType === 'users' ? 'users' : targetType === 'classes' ? 'classes' : 'all');
+        const ids = targetType === 'users' ? selectedUsers : targetType === 'classes' ? selectedClasses : [];
+        form.append("target_ids", JSON.stringify(ids));
+
+        const res = await authFetch(apiEndpoints.assignments, {
+          method: "POST",
+          body: form,
+        });
+        
+        if (!res.ok) throw new Error("作成失敗");
+        setMessage("宿題を作成しました");
+        showSnackbar("宿題を作成しました", "success");
+        
+        setTitle("");
+        setDescription("");
+        setQuestionText("");
+        setInputExample("");
+        setExpectedOutput("");
+        setLessonId("");
+        setFile(null);
+        setProblemType("choice");
+        setChoiceOptions(["", ""]);
+      }
+
+      setTimeout(() => navigate("/admin/assignments"), 800);
     } catch (err: any) {
-      setError((err.message || "作成に失敗しました"));
-      showSnackbar("作成に失敗しました", "error");
+      setError((err.message || (isEditMode ? "更新に失敗しました" : "作成に失敗しました")));
+      showSnackbar(isEditMode ? "更新に失敗しました" : "作成に失敗しました", "error");
     } finally {
       setLoading(false);
     }
@@ -148,9 +261,9 @@ const AdminCreateAssignment: React.FC = () => {
   return (
     <div className="page-container">
       <PageHeader
-        title="宿題作成"
-        subtitle="新しい宿題を作成します"
-        breadcrumbs={[{ label: "管理" }, { label: "宿題" }, { label: "作成" }]}
+        title={isEditMode ? "宿題編集" : "宿題作成"}
+        subtitle={isEditMode ? "既存の宿題内容を更新します" : "新しい宿題を作成します"}
+        breadcrumbs={[{ label: "管理" }, { label: "宿題" }, { label: isEditMode ? "編集" : "作成" }]}
       />
 
       {message && <div className="message message-success">{message}</div>}
@@ -162,7 +275,7 @@ const AdminCreateAssignment: React.FC = () => {
           <div className="card-title">宿題情報を入力</div>
           <div className="form-section">
             <div className="form-group">
-              <label className="form-label">� 教材</label>
+              <label className="form-label">教材</label>
               <select
                 className="form-select"
                 value={selectedMaterial}
@@ -248,29 +361,134 @@ const AdminCreateAssignment: React.FC = () => {
               )}
             </div>
 
+            {/* 問題タイプの選択 */}
             <div className="form-group">
-              <label className="form-label">入力例</label>
-              <textarea
-                className="form-textarea"
-                placeholder="入力例を入力"
-                value={inputExample}
-                onChange={e => setInputExample(e.target.value)}
-                disabled={loading}
-                rows={2}
-              />
+              <label className="form-label">問題タイプ</label>
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
+                <label>
+                  <input 
+                    type="radio" 
+                    name="problemType" 
+                    value="choice" 
+                    checked={problemType === "choice"}
+                    onChange={() => setProblemType("choice")}
+                  /> 選択式
+                </label>
+                <label>
+                  <input 
+                    type="radio" 
+                    name="problemType" 
+                    value="essay" 
+                    checked={problemType === "essay"}
+                    onChange={() => setProblemType("essay")}
+                  /> 記述式
+                </label>
+                <label>
+                  <input 
+                    type="radio" 
+                    name="problemType" 
+                    value="code" 
+                    checked={problemType === "code"}
+                    onChange={() => setProblemType("code")}
+                  /> コード実行
+                </label>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">望ましい出力</label>
-              <textarea
-                className="form-textarea"
-                placeholder="期待される出力結果を入力"
-                value={expectedOutput}
-                onChange={e => setExpectedOutput(e.target.value)}
-                disabled={loading}
-                rows={2}
-              />
-            </div>
+            {/* 選択式用フォーム */}
+            {problemType === "choice" && (
+              <div className="form-group">
+                <label className="form-label">選択肢</label>
+                {choiceOptions.map((option, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="radio"
+                      name="correctAnswer"
+                      checked={correctAnswerIndex === idx}
+                      onChange={() => setCorrectAnswerIndex(idx)}
+                      disabled={loading}
+                    />
+                    <input
+                      className="form-input"
+                      type="text"
+                      placeholder={`選択肢 ${idx + 1}`}
+                      value={option}
+                      onChange={(e) => {
+                        const newOptions = [...choiceOptions];
+                        newOptions[idx] = e.target.value;
+                        setChoiceOptions(newOptions);
+                      }}
+                      disabled={loading}
+                      style={{ flex: 1 }}
+                    />
+                    {choiceOptions.length > 2 && (
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => setChoiceOptions(choiceOptions.filter((_, i) => i !== idx))}
+                        disabled={loading}
+                        style={{ padding: '0.5rem 0.75rem', fontSize: '0.9rem' }}
+                      >
+                        削除
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setChoiceOptions([...choiceOptions, ""])}
+                  disabled={loading}
+                  style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
+                >
+                  + 選択肢を追加
+                </button>
+              </div>
+            )}
+
+            {/* 記述式用フォーム */}
+            {problemType === "essay" && (
+              <div className="form-group">
+                <label className="form-label">期待される回答例</label>
+                <textarea
+                  className="form-textarea"
+                  placeholder="学生が答えるべき内容の例を入力"
+                  value={expectedOutput}
+                  onChange={e => setExpectedOutput(e.target.value)}
+                  disabled={loading}
+                  rows={3}
+                />
+                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.5rem" }}>
+                  ※ これは採点時の参考用です
+                </p>
+              </div>
+            )}
+
+            {/* コード実行用フォーム */}
+            {problemType === "code" && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">入力例</label>
+                  <textarea
+                    className="form-textarea"
+                    placeholder="入力例を入力"
+                    value={inputExample}
+                    onChange={e => setInputExample(e.target.value)}
+                    disabled={loading}
+                    rows={2}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">期待される出力</label>
+                  <textarea
+                    className="form-textarea"
+                    placeholder="期待される出力結果を入力"
+                    value={expectedOutput}
+                    onChange={e => setExpectedOutput(e.target.value)}
+                    disabled={loading}
+                    rows={2}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="form-group">
               <label className="form-label">配布対象</label>
@@ -289,7 +507,7 @@ const AdminCreateAssignment: React.FC = () => {
                   disabled={loading}
                 >
                   {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.username}{u.is_admin? ' (admin)':''}</option>
+                    <option key={u.id} value={u.id}>{u.username}</option>
                   ))}
                 </select>
               )}
@@ -315,7 +533,7 @@ const AdminCreateAssignment: React.FC = () => {
                 className="form-input"
                 type="file"
                 onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
-                disabled={loading}
+                disabled={loading || isEditMode}
               />
               {file && <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>{file.name}</p>}
             </div>
@@ -458,9 +676,9 @@ const AdminCreateAssignment: React.FC = () => {
         <button
           className="btn btn-primary"
           onClick={handleSubmit}
-          disabled={loading || !lessonValid || !titleValid || !questionValid}
+          disabled={loading || !lessonValid || !titleValid || !questionValid || (isEditMode && !assignmentLoaded)}
         >
-          {loading ? "作成中..." : "宿題を作成"}
+          {loading ? (isEditMode ? "更新中..." : "作成中...") : (isEditMode ? "宿題を更新" : "宿題を作成")}
         </button>
       </div>
     </div>

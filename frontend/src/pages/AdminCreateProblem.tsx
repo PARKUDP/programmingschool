@@ -35,8 +35,10 @@ const AdminCreateProblem = () => {
   const { showSnackbar } = useSnackbar();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isStaff = user?.is_admin || user?.role === "teacher";
 
   useEffect(() => {
+    if (!isStaff) return;
     // URLパラメータからレッスンIDを取得
     const lessonIdFromUrl = Number(searchParams.get("lesson_id"));
     if (lessonIdFromUrl) {
@@ -50,7 +52,7 @@ const AdminCreateProblem = () => {
         setError("レッスン取得失敗: " + err.message);
         showSnackbar("レッスン取得失敗", "error");
       });
-  }, [authFetch, searchParams, showSnackbar]);
+  }, [authFetch, searchParams, showSnackbar, isStaff]);
 
   const handleAddChoice = () => {
     setChoices([...choices, { text: "", isCorrect: false }]);
@@ -177,7 +179,7 @@ const AdminCreateProblem = () => {
     }
   };
 
-  if (!user?.is_admin) {
+  if (!isStaff) {
     return (
       <div className="page-container">
         <p className="message message-error">権限がありません</p>

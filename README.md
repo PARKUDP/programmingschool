@@ -146,3 +146,43 @@ docker-compose up --build
 
 `/api/progress` の集計結果は 60 秒間キャッシュされます。`force=1` を
 クエリに付与するとキャッシュを無視して再計算できます。
+## Cloudflare ドメイン統合（parkudp.me）
+
+本システムは Cloudflare で管理されている `parkudp.me` ドメインに対応しています。
+
+### 本番環境での実行
+
+```bash
+# 本番用設定を使用して起動
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### 環境変数の設定
+
+`.env` ファイルを作成し、以下を設定してください：
+
+```bash
+DB_PASSWORD=strong_secure_password
+JWT_SECRET=long_random_secret_key
+DOMAIN=parkudp.me
+ROOT_PASSWORD=secure_root_password
+```
+
+### Cloudflare DNS 設定
+
+詳細は [CLOUDFLARE_SETUP.md](./CLOUDFLARE_SETUP.md) を参照してください。
+
+```
+A レコード
+名前: school （またはサブドメインなし）
+IPv4 アドレス: あなたのサーバーの IP
+プロキシ状態: プロキシ表示（オレンジ色）
+```
+
+### セキュリティ
+
+- `.env` ファイルは自動的に `.gitignore` に含まれています
+- JWT_SECRET と DB_PASSWORD は本番環境では必ず変更してください
+- Cloudflare WAF と DDoS 対策が自動的に有効になります
+
+---

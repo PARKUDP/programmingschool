@@ -1,129 +1,130 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { apiEndpoints } from "../config/api";
 import CodeEditor from "../components/CodeEditor";
 import PageHeader from "../components/PageHeader";
 import { useSnackbar } from "../components/SnackbarContext";
 import ReactMarkdown from "react-markdown";
+import { apiEndpoints } from "../config/api";
 
-type ProblemType = "code" | "multiple_choice" | "essay";
+type ProblemType = "choice" | "essay" | "code";
 
-interface Problem {
+interface Assignment {
   id: number;
   lesson_id: number;
   title: string;
-  markdown: string;
-  type: ProblemType;
+  description: string;
+  question_text: string;
+  problem_type: ProblemType;
+  input_example?: string;
+  expected_output?: string;
+  file_path?: string;
   created_at: string;
+  exec_mode?: "stdin" | "function";
+  entry_function?: string | null;
 }
 
-interface Choice {
+interface ChoiceOption {
   id: number;
-  problem_id: number;
-  choice_text: string;
+  option_text: string;
+  option_order: number;
   is_correct: number;
-  display_order: number;
 }
 
-interface EssaySubmission {
+interface Submission {
   id: number;
-  answer_text: string;
-  is_graded: number;
-  grade: string | null;
+  is_correct: number | null;
   feedback: string | null;
+  code?: string;
+  answer_text?: string;
+  selected_choice_id?: number;
 }
 
 const ProblemSolve: React.FC = () => {
-  const { problemId } = useParams<{ problemId: string }>();
+  const { assignmentId } = useParams<{ assignmentId: string }>();
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
   const { showSnackbar } = useSnackbar();
 
-  // State
-  const [problem, setProblem] = useState<Problem | null>(null);
-  const [choices, setChoices] = useState<Choice[]>([]);
+  const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [choiceOptions, setChoiceOptions] = useState<ChoiceOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [existingSubmission, setExistingSubmission] = useState<Submission | null>(null);
 
-  // Problem-specific states
   const [code, setCode] = useState("# Pythonのコードをここに書いてください\n");
+  const [runLoading, setRunLoading] = useState(false);
+  const [runResult, setRunResult] = useState<{ all_passed: number; cases: { input: string; expected_output: string; output: string; passed: boolean; }[] } | null>(null);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
   const [essayText, setEssayText] = useState("");
-  const [submitResult, setSubmitResult] = useState<any>(null);
-  const [essaySubmission, setEssaySubmission] = useState<EssaySubmission | null>(null);
 
   useEffect(() => {
-    if (!problemId) return;
+    if (!assignmentId) return;
+    fetchAssignmentData();
+  }, [assignmentId]);
 
-    // 問題を取得
-    authFetch(`${apiEndpoints.problems}/${problemId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("問題の取得に失敗しました");
-        return res.json();
-      })
-      .then((data) => {
-        setProblem(data);
+  const fetchAssignmentData = async () => {
+    try {
+      const assignmentRes = await authFetch(`${apiEndpoints.assignments}/${assignmentId}`);
+      if (!assignmentRes.ok) throw new Error("宿題の取得に失敗しました");
+      const assignmentData = await assignmentRes.json();
+      // 既存提出の取得
+      const submissionRes = await authFetch(
+        `${apiEndpoints.submissions}?assignment_id=${assignmentId}`
+      );
+      if (submissionRes.ok) {
+        const submissions = await submissionRes.json();
+        if (Array.isArray(submissions) && submissions.length > 0) {
+          const submission = submissions[0];
+          setExistingSubmission(submission);
+          if (submission.code) setCode(submission.code);
+          if (submission.answer_text) setEssayText(submission.answer_text);
+          if (submission.selected_choice_id) setSelectedChoice(submission.selected_choice_id);
+        }
+      }
 
-        // 客観式問題の選択肢を取得
-        if (data.type === "multiple_choice") {
-          return authFetch(`/api/problems/${problemId}/choices`).then((res) => res.json());
-        }
-        return null;
-      })
-      .then((choicesData) => {
-        if (choicesData) {
-          setChoices(Array.isArray(choicesData) ? choicesData : choicesData.choices || []);
-        }
+      // 選択肢を常に取得して、タイプが無い場合のフォールバックに使う
+      let fetchedChoices: ChoiceOption[] = [];
+      const choicesRes = await authFetch(
+        `${apiEndpoints.assignments}/${assignmentId}/choices`
+      );
+      if (choicesRes.ok) {
+        const choices = await choicesRes.json();
+        fetchedChoices = Array.isArray(choices) ? choices : choices.choices || [];
+        setChoiceOptions(fetchedChoices);
+      }
 
-        // 文章問題の既存提出を取得
-        if (problem?.type === "essay") {
-          return authFetch(`/api/essay-submissions?problem_id=${problemId}`).then((res) =>
-            res.json()
-          );
-        }
-        return null;
-      })
-      .then((submissions) => {
-        if (submissions && Array.isArray(submissions) && submissions.length > 0) {
-          setEssaySubmission(submissions[0]);
-          setEssayText(submissions[0].answer_text || "");
-        }
-      })
-      .catch((err: any) => {
-        setError(err.message || "エラーが発生しました");
-        showSnackbar("エラーが発生しました", "error");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [problemId, authFetch, showSnackbar]);
+      const finalType: ProblemType = (assignmentData.problem_type as ProblemType) || (fetchedChoices.length > 0 ? "choice" : "code");
+      setAssignment({ ...assignmentData, problem_type: finalType });
+    } catch (err: any) {
+      setError(err.message || "エラーが発生しました");
+      showSnackbar("エラーが発生しました", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmitCode = async () => {
-    if (!problem || !user) return;
-
+    if (!assignment || !user) return;
     setSubmitting(true);
     setError("");
-
     try {
       const res = await authFetch(apiEndpoints.submit, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          assignment_id: problem.id,
+          assignment_id: assignment.id,
           code: code,
         }),
       });
-
       if (!res.ok) throw new Error("提出に失敗しました");
-
       const data = await res.json();
-      setSubmitResult(data);
       showSnackbar(
         data.is_correct ? "テストケースに合格しました！" : "テストケースが失敗しました",
-        data.is_correct ? "success" : "warning"
+        data.is_correct ? "success" : "info"
       );
+      await fetchAssignmentData();
     } catch (err: any) {
       const errorMsg = err.message || "提出に失敗しました";
       setError(errorMsg);
@@ -133,37 +134,54 @@ const ProblemSolve: React.FC = () => {
     }
   };
 
+  const handleRunCode = async () => {
+    if (!assignment || assignment.problem_type !== "code") return;
+    setRunLoading(true);
+    setError("");
+    try {
+      const res = await authFetch(apiEndpoints.run, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignment_id: assignment.id, code }),
+      });
+      if (!res.ok) throw new Error("実行に失敗しました");
+      const data = await res.json();
+      setRunResult(data);
+      showSnackbar(data.all_passed ? "すべてのテストに合格しました (未提出)" : "出力を確認してください", data.all_passed ? "success" : "info");
+    } catch (err: any) {
+      const errorMsg = err.message || "実行に失敗しました";
+      setError(errorMsg);
+      showSnackbar(errorMsg, "error");
+    } finally {
+      setRunLoading(false);
+    }
+  };
+
   const handleSubmitChoice = async () => {
-    if (!problem || selectedChoice === null) {
+    if (!assignment || selectedChoice === null) {
       setError("選択肢を選んでください");
       showSnackbar("選択肢を選んでください", "error");
       return;
     }
-
     setSubmitting(true);
     setError("");
-
     try {
-      const selected = choices.find((c) => c.id === selectedChoice);
-      const isCorrect = selected?.is_correct === 1;
-
+      const selectedOption = choiceOptions.find((c) => c.id === selectedChoice);
       const res = await authFetch(apiEndpoints.submit, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          assignment_id: problem.id,
-          code: JSON.stringify({ choice_id: selectedChoice, is_correct: isCorrect }),
+          assignment_id: assignment.id,
+          selected_choice_id: selectedChoice,
         }),
       });
-
       if (!res.ok) throw new Error("提出に失敗しました");
-
-      const data = await res.json();
-      setSubmitResult({
-        is_correct: isCorrect,
-        feedback: isCorrect ? "正解です！" : "不正解です",
-      });
-      showSnackbar(isCorrect ? "正解です！" : "不正解です", isCorrect ? "success" : "warning");
+      const result = await res.json();
+      showSnackbar(
+        result?.is_correct ? "正解です！" : "不正解です",
+        result?.is_correct ? "success" : "info"
+      );
+      await fetchAssignmentData();
     } catch (err: any) {
       const errorMsg = err.message || "提出に失敗しました";
       setError(errorMsg);
@@ -174,55 +192,25 @@ const ProblemSolve: React.FC = () => {
   };
 
   const handleSubmitEssay = async () => {
-    if (!problem || !essayText.trim()) {
+    if (!assignment || !essayText.trim()) {
       setError("答案を入力してください");
       showSnackbar("答案を入力してください", "error");
       return;
     }
-
     setSubmitting(true);
     setError("");
-
     try {
-      const endpoint = essaySubmission
-        ? `/api/essay-submissions/${essaySubmission.id}`
-        : "/api/essay-submissions";
-      const method = essaySubmission ? "PUT" : "POST";
-
-      const body = essaySubmission
-        ? JSON.stringify({ answer_text: essayText.trim() })
-        : JSON.stringify({
-            problem_id: problem.id,
-            answer_text: essayText.trim(),
-          });
-
-      const res = await authFetch(endpoint, {
-        method,
+      const res = await authFetch(apiEndpoints.submit, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body,
+        body: JSON.stringify({
+          assignment_id: assignment.id,
+          answer_text: essayText,
+        }),
       });
-
       if (!res.ok) throw new Error("提出に失敗しました");
-
-      const data = await res.json();
-
-      if (essaySubmission) {
-        setEssaySubmission({ ...essaySubmission, answer_text: essayText.trim() });
-      } else {
-        setEssaySubmission({
-          id: data.id,
-          answer_text: essayText.trim(),
-          is_graded: 0,
-          grade: null,
-          feedback: null,
-        });
-      }
-
-      setSubmitResult({
-        is_correct: null,
-        feedback: "答案を提出しました。先生による採点をお待ちください。",
-      });
-      showSnackbar("答案を提出しました", "success");
+      showSnackbar("答案を提出しました。採点をお待ちください。", "success");
+      await fetchAssignmentData();
     } catch (err: any) {
       const errorMsg = err.message || "提出に失敗しました";
       setError(errorMsg);
@@ -235,18 +223,15 @@ const ProblemSolve: React.FC = () => {
   if (loading) {
     return (
       <div className="page-container">
-        <div className="loading">
-          <div className="spinner"></div>
-          <p>読み込み中...</p>
-        </div>
+        <p>読み込み中...</p>
       </div>
     );
   }
 
-  if (!problem) {
+  if (!assignment) {
     return (
       <div className="page-container">
-        <p className="message message-error">問題が見つかりません</p>
+        <p className="message message-error">宿題が見つかりません</p>
       </div>
     );
   }
@@ -254,149 +239,217 @@ const ProblemSolve: React.FC = () => {
   return (
     <div className="page-container">
       <PageHeader
-        title={problem.title}
-        subtitle={`問題タイプ: ${
-          problem.type === "code"
-            ? "コード問題"
-            : problem.type === "multiple_choice"
-            ? "客観式問題"
-            : "文章問題"
-        }`}
-        breadcrumbs={[
-          { label: "問題", href: "/problems" },
-          { label: problem.title },
-        ]}
+        title={assignment.title}
+        subtitle={assignment.description || ""}
+        breadcrumbs={[{ label: "宿題一覧" }, { label: assignment.title }]}
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
-        {/* 左: 問題文 */}
-        <div>
-          <div className="card" style={{ padding: "1.5rem" }}>
-            <h3 style={{ marginBottom: "1rem" }}>問題文</h3>
-            <div
-              style={{
-                fontSize: "1rem",
-                lineHeight: "1.6",
-                color: "var(--text-primary)",
-              }}
-            >
-              <ReactMarkdown>{problem.markdown}</ReactMarkdown>
-            </div>
+      {error && <div className="message message-error">{error}</div>}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", alignItems: "start" }}>
+        <div className="card">
+          <div className="card-title">問題文</div>
+          <div style={{ fontSize: "0.95rem", lineHeight: "1.6" }}>
+            <ReactMarkdown>{assignment.question_text}</ReactMarkdown>
           </div>
+
+          {assignment.problem_type === "code" && (
+            <>
+              {assignment.input_example && (
+                <div style={{ marginTop: "1.5rem", paddingTop: "1.5rem", borderTop: "1px solid var(--border)" }}>
+                  <h4 style={{ marginBottom: "0.5rem", fontSize: "0.95rem", fontWeight: "600" }}>入力例</h4>
+                  <pre style={{
+                    backgroundColor: "#f9fafb",
+                    padding: "0.75rem",
+                    borderRadius: "0.5rem",
+                    overflow: "auto",
+                  }}>
+                    {assignment.input_example}
+                  </pre>
+                </div>
+              )}
+
+              {assignment.expected_output && (
+                <div style={{ marginTop: "1rem" }}>
+                  <h4 style={{ marginBottom: "0.5rem", fontSize: "0.95rem", fontWeight: "600" }}>期待される出力</h4>
+                  <pre style={{
+                    backgroundColor: "#f0fdf4",
+                    padding: "0.75rem",
+                    borderRadius: "0.5rem",
+                    overflow: "auto",
+                  }}>
+                    {assignment.expected_output}
+                  </pre>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {/* 右: 入力フォーム */}
-        <div>
-          <div className="card" style={{ padding: "1.5rem" }}>
-            {error && <div className="message message-error">{error}</div>}
-            {submitResult && (
-              <div
-                className={`message ${submitResult.is_correct ? "message-success" : submitResult.is_correct === false ? "message-warning" : "message-info"}`}
-              >
-                <strong>{submitResult.is_correct ? "提出完了" : submitResult.is_correct === false ? "結果" : "通知"}</strong>
-                <p>{submitResult.feedback}</p>
-              </div>
-            )}
+        <div className="card">
+          <div className="card-title">答案を提出</div>
 
-            {problem.type === "code" && (
-              <div>
-                <h3 style={{ marginBottom: "1rem" }}>コードを入力</h3>
-                <CodeEditor value={code} onChange={setCode} height={400} />
+          {existingSubmission && (
+            <div className={`message ${existingSubmission.is_correct === 1 ? "message-success" : existingSubmission.is_correct === 0 ? "message-error" : "message-info"}`} style={{ marginBottom: "1rem" }}>
+              {existingSubmission.is_correct === 1 && (
+                <>
+                  <strong>✓ 正解</strong>
+                  <p>このテストケースに合格しました。</p>
+                </>
+              )}
+              {existingSubmission.is_correct === 0 && (
+                <>
+                  <strong>✗ 不正解</strong>
+                  <p>答え直してみてください。</p>
+                </>
+              )}
+              {existingSubmission.is_correct === null && (
+                <>
+                  <strong>採点待機中</strong>
+                  <p>講師による採点をお待ちください。</p>
+                </>
+              )}
+              {existingSubmission.feedback && (
+                <p style={{ marginTop: "0.75rem" }}>
+                  <strong>フィードバック:</strong> {existingSubmission.feedback}
+                </p>
+              )}
+            </div>
+          )}
+
+          {assignment.problem_type === "code" && (
+            <div>
+              <h4 style={{ marginBottom: "0.75rem", fontSize: "0.95rem", fontWeight: "600" }}>コードを入力</h4>
+              <CodeEditor value={code} onChange={setCode} height={350} />
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+                <button
+                  onClick={handleRunCode}
+                  disabled={runLoading}
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                >
+                  {runLoading ? "実行中..." : "実行 (提出しない)"}
+                </button>
                 <button
                   onClick={handleSubmitCode}
                   disabled={submitting}
                   className="btn btn-primary"
-                  style={{ marginTop: "1rem", width: "100%" }}
+                  style={{ flex: 1 }}
                 >
                   {submitting ? "提出中..." : "提出"}
                 </button>
               </div>
-            )}
 
-            {problem.type === "multiple_choice" && (
-              <div>
-                <h3 style={{ marginBottom: "1rem" }}>選択肢を選んでください</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {choices.map((choice) => (
-                    <label
-                      key={choice.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        padding: "0.75rem 1rem",
-                        border: `2px solid ${
-                          selectedChoice === choice.id ? "#3b82f6" : "#e5e7eb"
-                        }`,
-                        borderRadius: "0.5rem",
-                        backgroundColor:
-                          selectedChoice === choice.id ? "#e0e7ff" : "#f9fafb",
-                        cursor: "pointer",
-                        transition: "all 0.2s",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="choice"
-                        value={choice.id}
-                        checked={selectedChoice === choice.id}
-                        onChange={() => setSelectedChoice(choice.id)}
-                        style={{ marginRight: "0.75rem", cursor: "pointer" }}
-                      />
-                      <span style={{ fontSize: "1rem" }}>{choice.choice_text}</span>
-                    </label>
-                  ))}
-                </div>
-                <button
-                  onClick={handleSubmitChoice}
-                  disabled={submitting || selectedChoice === null}
-                  className="btn btn-primary"
-                  style={{ marginTop: "1rem", width: "100%" }}
-                >
-                  {submitting ? "提出中..." : "提出"}
-                </button>
-              </div>
-            )}
-
-            {problem.type === "essay" && (
-              <div>
-                <h3 style={{ marginBottom: "1rem" }}>答案を入力</h3>
-                {essaySubmission?.is_graded === 1 && (
-                  <div
-                    className={`message ${essaySubmission.grade === "A" || essaySubmission.grade === "B" ? "message-success" : "message-warning"}`}
-                    style={{ marginBottom: "1rem" }}
-                  >
-                    <strong>採点済み</strong>
-                    <p>成績: {essaySubmission.grade}</p>
-                    {essaySubmission.feedback && <p>{essaySubmission.feedback}</p>}
+              {runResult && (
+                <div className="card" style={{ marginTop: "1rem" }}>
+                  <div className="card-title">実行結果 (未提出)</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    {runResult.cases.map((c, idx) => (
+                      <div key={idx} style={{ border: "1px solid var(--border)", borderRadius: "0.5rem", padding: "0.75rem", background: "#f9fafb" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem", fontWeight: 600 }}>
+                          <span>ケース {idx + 1}</span>
+                          <span style={{ color: c.passed ? "#059669" : "#b91c1c" }}>
+                            {c.passed ? "PASS" : "FAIL"}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                          <div style={{ marginBottom: "0.25rem" }}><strong>入力:</strong> {c.input || "(なし)"}</div>
+                          <div style={{ marginBottom: "0.25rem" }}><strong>期待出力:</strong><pre style={{ whiteSpace: "pre-wrap", margin: 0, color: "#0f172a" }}>{c.expected_output}</pre></div>
+                          <div style={{ marginBottom: "0.25rem" }}><strong>あなたの出力:</strong><pre style={{ whiteSpace: "pre-wrap", margin: 0, color: c.passed ? "#0f172a" : "#b91c1c" }}>{c.output}</pre></div>
+                          {!c.passed && c.output.includes("TypeError: unsupported operand type(s)") && c.output.includes("function") && (
+                            <div style={{ 
+                              marginTop: "0.5rem", 
+                              padding: "0.5rem", 
+                              background: "#fef2f2", 
+                              borderLeft: "3px solid #ef4444", 
+                              borderRadius: "4px",
+                              fontSize: "0.85rem",
+                              color: "#991b1b"
+                            }}>
+                              <strong>💡 ヒント:</strong> 関数名と引数名を混同していませんか？<br />
+                              関数の中では引数名（例: <code style={{ background: "#fee2e2", padding: "2px 4px", borderRadius: "2px" }}>n</code>）を使い、関数名自体は使わないでください。
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
-                <textarea
-                  value={essayText}
-                  onChange={(e) => setEssayText(e.target.value)}
-                  placeholder="答案を入力してください"
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "2px solid #e0e7ff",
-                    borderRadius: "0.5rem",
-                    backgroundColor: "#f8fafc",
-                    fontSize: "1rem",
-                    fontFamily: "inherit",
-                    minHeight: "250px",
-                    resize: "vertical",
-                  }}
-                />
-                <button
-                  onClick={handleSubmitEssay}
-                  disabled={submitting}
-                  className="btn btn-primary"
-                  style={{ marginTop: "1rem", width: "100%" }}
-                >
-                  {submitting ? "提出中..." : "提出"}
-                </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {assignment.problem_type === "choice" && (
+            <div>
+              <h4 style={{ marginBottom: "0.75rem", fontSize: "0.95rem", fontWeight: "600" }}>選択肢を選んでください</h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
+                {choiceOptions.map((option) => (
+                  <label
+                    key={option.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "0.75rem 1rem",
+                      border: `2px solid ${selectedChoice === option.id ? "#3b82f6" : "#e5e7eb"}`,
+                      borderRadius: "0.5rem",
+                      backgroundColor: selectedChoice === option.id ? "#e0e7ff" : "#f9fafb",
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="choice"
+                      value={option.id}
+                      checked={selectedChoice === option.id}
+                      onChange={() => setSelectedChoice(option.id)}
+                      style={{ marginRight: "0.75rem", cursor: "pointer" }}
+                    />
+                    <span>{option.option_text}</span>
+                  </label>
+                ))}
               </div>
-            )}
-          </div>
+              <button
+                onClick={handleSubmitChoice}
+                disabled={submitting || selectedChoice === null}
+                className="btn btn-primary"
+                style={{ width: "100%" }}
+              >
+                {submitting ? "提出中..." : "提出"}
+              </button>
+            </div>
+          )}
+
+          {assignment.problem_type === "essay" && (
+            <div>
+              <h4 style={{ marginBottom: "0.75rem", fontSize: "0.95rem", fontWeight: "600" }}>答案を入力</h4>
+              <textarea
+                value={essayText}
+                onChange={(e) => setEssayText(e.target.value)}
+                placeholder="答案を入力してください"
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "2px solid #e5e7eb",
+                  borderRadius: "0.5rem",
+                  backgroundColor: "#f8fafc",
+                  fontSize: "1rem",
+                  fontFamily: "inherit",
+                  minHeight: "250px",
+                  resize: "vertical",
+                  marginBottom: "1rem",
+                }}
+              />
+              <button
+                onClick={handleSubmitEssay}
+                disabled={submitting}
+                className="btn btn-primary"
+                style={{ width: "100%" }}
+              >
+                {submitting ? "提出中..." : "提出"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

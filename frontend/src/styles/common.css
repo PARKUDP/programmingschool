@@ -511,9 +511,10 @@ body {
 }
 
 .message-error {
-  background: #fee2e2;
-  border-left-color: #ef4444;
-  color: #991b1b;
+  background: #ffe4e6;
+  border-left-color: #e11d48;
+  color: #9f1239;
+  border: 1px solid #fecdd3;
 }
 
 .message-warning {

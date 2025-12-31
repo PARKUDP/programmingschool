@@ -1,0 +1,26 @@
+:80 {
+  # ---- Programming School ----
+  @school host school.parkudp.me
+  handle @school {
+    # バックエンドAPI（PHP）
+    @api path /api/* /uploads/*
+    handle @api {
+      reverse_proxy backend:80 {
+        header_up Host {host}
+        header_up X-Forwarded-Proto https
+        header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+      }
+    }
+
+    # フロントエンド（React）: その他のパスをフロントへ
+    handle {
+      reverse_proxy frontend:3000 {
+        header_up Host {host}
+        header_up X-Forwarded-Proto https
+        header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+      }
+    }
+  }
+
+  respond "not found" 404
+}

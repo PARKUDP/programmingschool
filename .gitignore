@@ -15,6 +15,9 @@ __pycache__/
 
 .pytest_cache/
 .env/
+.env
+.env.local
+.env.*.local
 venv/
 .venv/
 
@@ -48,8 +51,28 @@ logs/
 frontend/node_modules/
 frontend/dist/
 frontend/build/
+
+# 機密情報
+backend/.env
+backend/db.sqlite3
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/docker-compose.override.yml
+
+# API キーと認証情報
+JWT_SECRET=
+DATABASE_PASSWORD=
+
 frontend/img/
 frontend/.env.local
 frontend/.env.*.local
 
 .env
+# Cloudflare Tunnel
+cloudflared/
+cloudflared/*.json
+cloudflared/cert.pem
+
+# Caddy
+caddy-data/
+caddy-config/

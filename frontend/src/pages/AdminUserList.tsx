@@ -14,6 +14,8 @@ interface UserItem {
 
 const AdminUserList: React.FC = () => {
   const { user, authFetch } = useAuth();
+  const canDeleteUsers = user?.is_admin;
+  const isStaff = user?.is_admin || user?.role === "teacher";
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -25,7 +27,8 @@ const AdminUserList: React.FC = () => {
     try {
       const res = await authFetch(apiEndpoints.users);
       const data = await res.json();
-      setUsers(data || []);
+      const filtered = (data || []).filter((u: UserItem) => u.id !== user?.id);
+      setUsers(filtered);
       setError("");
     } catch (e: any) {
       setError("取得に失敗しました: " + e.message);
@@ -35,16 +38,17 @@ const AdminUserList: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!user?.is_admin) return;
+    if (!isStaff) return;
     load();
-  }, [user]);
+  }, [isStaff]);
 
   const handleDelete = async (uid: number, username: string) => {
+    if (!canDeleteUsers) return;
     setConfirmDialog({ isOpen: true, userId: uid, username });
   };
 
   const confirmDelete = async () => {
-    if (!confirmDialog.userId) return;
+    if (!confirmDialog.userId || !canDeleteUsers) return;
     const uid = confirmDialog.userId;
     setConfirmDialog({ isOpen: false, userId: null, username: "" });
     try {
@@ -57,7 +61,7 @@ const AdminUserList: React.FC = () => {
     }
   };
 
-  if (!user?.is_admin) {
+  if (!isStaff) {
     return <div className="page-container"><p className="message message-error">権限がありません</p></div>;
   }
 
@@ -96,8 +100,14 @@ const AdminUserList: React.FC = () => {
                   <button 
                     className="btn btn-danger" 
                     onClick={() => handleDelete(u.id, u.username)} 
-                    disabled={u.id === user.id}
-                    title={u.id === user.id ? "自分自身は削除できません" : ""}
+                    disabled={u.id === user.id || !canDeleteUsers}
+                    title={
+                      !canDeleteUsers
+                        ? "ユーザー削除は管理者のみ可能です"
+                        : u.id === user.id
+                          ? "自分自身は削除できません"
+                          : ""
+                    }
                   >
                     削除
                   </button>

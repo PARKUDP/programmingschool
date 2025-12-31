@@ -5,9 +5,12 @@ import { apiEndpoints } from "../config/api";
 interface Submission {
   id: number;
   assignment_id: number;
-  is_correct: number;
-  feedback: string;
-  code: string;
+  problem_type?: string;
+  is_correct: number | null;
+  feedback: string | null;
+  code?: string;
+  answer_text?: string;
+  selected_choice_id?: number | null;
   submitted_at: string;
 }
 
@@ -15,6 +18,7 @@ interface Assignment {
   id: number;
   title: string;
   lesson_id: number;
+  problem_type?: string;
 }
 
 interface Lesson {
@@ -33,6 +37,7 @@ const SubmissionHistory: React.FC = () => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [choiceMap, setChoiceMap] = useState<Record<number, { id: number; option_text: string }[]>>({});
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [codeViewId, setCodeViewId] = useState<number | null>(null);
@@ -62,6 +67,23 @@ const SubmissionHistory: React.FC = () => {
       setAssignments(assignmentData || []);
       setLessons(lessonData || []);
       setMaterials(materialData || []);
+
+      // 選択式宿題の選択肢を取得
+      const choiceAssignments = (assignmentData || []).filter((a: Assignment) => a.problem_type === "choice");
+      const choiceEntries = await Promise.all(
+        choiceAssignments.map(async (a: Assignment) => {
+          const res = await authFetch(`${apiEndpoints.assignments}/${a.id}/choices`);
+          if (!res.ok) return [a.id, []];
+          const data = await res.json();
+          const options = Array.isArray(data) ? data : data.choices || [];
+          return [a.id, options.map((o: any) => ({ id: o.id, option_text: o.option_text }))];
+        })
+      );
+      const map: Record<number, { id: number; option_text: string }[]> = {};
+      choiceEntries.forEach(([id, opts]) => {
+        map[id as number] = opts as { id: number; option_text: string }[];
+      });
+      setChoiceMap(map);
     } catch (err: any) {
       console.error("データ取得に失敗しました", err);
       setSubmissions([]);
@@ -84,6 +106,88 @@ const SubmissionHistory: React.FC = () => {
       material: material?.title || "教材なし",
       lesson: lesson?.title || "レッスンなし",
     };
+  };
+
+  const renderSubmissionBody = (submission: Submission) => {
+    const assignment = assignments.find((a) => a.id === submission.assignment_id);
+    const type = assignment?.problem_type || submission.problem_type || "code";
+
+    if (type === "choice") {
+      const options = choiceMap[submission.assignment_id] || [];
+      const selected = options.find((o) => o.id === submission.selected_choice_id);
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div>
+            <strong>あなたの選択:</strong> {selected ? selected.option_text : "選択が見つかりません"}
+          </div>
+          <div>
+            <strong>選択肢一覧:</strong>
+            <ul style={{ margin: "0.5rem 0 0", paddingLeft: "1.25rem" }}>
+              {options.map((o) => (
+                <li key={o.id} style={{ color: o.id === submission.selected_choice_id ? "#2563eb" : "inherit" }}>
+                  {o.option_text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      );
+    }
+
+    if (type === "essay") {
+      return (
+        <div
+          style={{
+            backgroundColor: "#f9fafb",
+            padding: "1rem",
+            borderRadius: "0.5rem",
+            border: "1px solid var(--border)",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {submission.answer_text || "(回答なし)"}
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <button
+          className="btn btn-primary"
+          onClick={() =>
+            setCodeViewId(codeViewId === submission.id ? null : submission.id)
+          }
+          style={{ marginBottom: "1rem", width: "100%" }}
+        >
+          {codeViewId === submission.id ? "コードを非表示" : "提出したコードを表示"}
+        </button>
+
+        {codeViewId === submission.id && (
+          <div
+            style={{
+              backgroundColor: "rgba(0, 0, 0, 0.3)",
+              padding: "1rem",
+              borderRadius: "0.5rem",
+              marginBottom: "1rem",
+              maxHeight: "400px",
+              overflowY: "auto",
+            }}
+          >
+            <pre
+              style={{
+                margin: "0",
+                fontSize: "0.85rem",
+                fontFamily: "monospace",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {submission.code}
+            </pre>
+          </div>
+        )}
+      </>
+    );
   };
 
   if (!user) {
@@ -135,78 +239,93 @@ const SubmissionHistory: React.FC = () => {
                   setExpandedId(expandedId === submission.id ? null : submission.id)
                 }
               >
-                <div style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "1rem",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    <span style={{ fontSize: "1rem", fontWeight: "bold", color: submission.is_correct === 1 ? "#22c55e" : "#ef4444" }}>
-                      {submission.is_correct === 1 ? "合格" : "不合格"}
-                    </span>
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{
-                          fontWeight: "600",
-                          fontSize: "1rem",
-                          color: "var(--text-primary)",
-                          marginBottom: "0.5rem",
-                        }}
-                      >
-                        {getAssignmentInfo(submission.assignment_id).title}
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "0.5rem",
-                          flexWrap: "wrap",
-                          marginBottom: "0.5rem",
-                        }}
-                      >
-                        <span
+                {(() => {
+                  const status = submission.is_correct;
+                  const label =
+                    status === null ? "採点待機中" : status === 1 ? "合格" : "不合格";
+                  const color =
+                    status === null ? "#f59e0b" : status === 1 ? "#22c55e" : "#ef4444";
+                  const info = getAssignmentInfo(submission.assignment_id);
+
+                  return (
+                    <>
+                      <div style={{ flex: 1 }}>
+                        <div
                           style={{
-                            fontSize: "0.75rem",
-                            padding: "0.25rem 0.5rem",
-                            borderRadius: "0.25rem",
-                            backgroundColor: "rgba(59, 130, 246, 0.2)",
-                            color: "rgb(96, 165, 250)",
-                            fontWeight: "500",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "1rem",
+                            marginBottom: "0.5rem",
                           }}
                         >
-                          教材: {getAssignmentInfo(submission.assignment_id).material}
-                        </span>
-                        <span
+                          <span style={{ fontSize: "1rem", fontWeight: "bold", color }}>
+                            {label}
+                          </span>
+                          <div style={{ flex: 1 }}>
+                            <div
+                              style={{
+                                fontWeight: "600",
+                                fontSize: "1rem",
+                                color: "var(--text-primary)",
+                                marginBottom: "0.5rem",
+                              }}
+                            >
+                              {info.title}
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "0.5rem",
+                                flexWrap: "wrap",
+                                marginBottom: "0.5rem",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.25rem 0.5rem",
+                                  borderRadius: "0.25rem",
+                                  backgroundColor: "rgba(59, 130, 246, 0.2)",
+                                  color: "rgb(96, 165, 250)",
+                                  fontWeight: "500",
+                                }}
+                              >
+                                教材: {info.material}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.25rem 0.5rem",
+                                  borderRadius: "0.25rem",
+                                  backgroundColor: "rgba(16, 185, 129, 0.2)",
+                                  color: "rgb(52, 211, 153)",
+                                  fontWeight: "500",
+                                }}
+                              >
+                                レッスン: {info.lesson}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                              提出日時: {new Date(submission.submitted_at).toLocaleString("ja-JP")}
+                            </div>
+                          </div>
+                        </div>
+                        <div
                           style={{
-                            fontSize: "0.75rem",
-                            padding: "0.25rem 0.5rem",
-                            borderRadius: "0.25rem",
-                            backgroundColor: "rgba(16, 185, 129, 0.2)",
-                            color: "rgb(52, 211, 153)",
-                            fontWeight: "500",
+                            fontSize: "0.85rem",
+                            color: "var(--text-secondary)",
                           }}
                         >
-                          レッスン: {getAssignmentInfo(submission.assignment_id).lesson}
-                        </span>
+                          {status === null
+                            ? "採点をお待ちください"
+                            : status === 1
+                            ? "採点が完了しました"
+                            : "再提出が必要です"}
+                        </div>
                       </div>
-                      <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                        提出日時: {new Date(submission.submitted_at).toLocaleString("ja-JP")}
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.85rem",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    {submission.is_correct === 1
-                      ? "すべてのテストケースに合格しました！"
-                      : "いくつかのテストケースが失敗しました"}
-                  </div>
-                </div>
+                    </>
+                  );
+                })()}
                 <div style={{ fontSize: "1.5rem", color: "var(--text-secondary)" }}>
                   {expandedId === submission.id ? "▼" : "▶"}
                 </div>
@@ -220,41 +339,7 @@ const SubmissionHistory: React.FC = () => {
                     borderTop: "1px solid var(--border)",
                   }}
                 >
-                  {/* コード表示ボタン */}
-                  <button
-                    className="btn btn-primary"
-                    onClick={() =>
-                      setCodeViewId(codeViewId === submission.id ? null : submission.id)
-                    }
-                    style={{ marginBottom: "1rem", width: "100%" }}
-                  >
-                    {codeViewId === submission.id ? "コードを非表示" : "提出したコードを表示"}
-                  </button>
-
-                  {codeViewId === submission.id && (
-                    <div
-                      style={{
-                        backgroundColor: "rgba(0, 0, 0, 0.3)",
-                        padding: "1rem",
-                        borderRadius: "0.5rem",
-                        marginBottom: "1rem",
-                        maxHeight: "400px",
-                        overflowY: "auto",
-                      }}
-                    >
-                      <pre
-                        style={{
-                          margin: "0",
-                          fontSize: "0.85rem",
-                          fontFamily: "monospace",
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {submission.code}
-                      </pre>
-                    </div>
-                  )}
+                  {renderSubmissionBody(submission)}
 
                   {/* フィードバック表示 */}
                   <div style={{ marginTop: "1rem" }}>
@@ -276,11 +361,11 @@ const SubmissionHistory: React.FC = () => {
                         fontSize: "0.9rem",
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-word",
-                        fontFamily: submission.is_correct ? "sans-serif" : "monospace",
+                        fontFamily: "sans-serif",
                         color: "var(--text-secondary)",
                       }}
                     >
-                      {submission.feedback}
+                      {submission.feedback || "フィードバックはまだありません"}
                     </div>
                   </div>
                 </div>
