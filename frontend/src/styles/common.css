@@ -188,8 +188,8 @@ body {
 }
 
 .snackbar-error { 
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border: 1px solid #b91c1c;
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+  border: 2px solid #7f1d1d;
 }
 
 @keyframes slideIn {
@@ -511,16 +511,23 @@ body {
 }
 
 .message-error {
-  background: #ffe4e6;
-  border-left-color: #e11d48;
-  color: #9f1239;
-  border: 1px solid #fecdd3;
+  background: #fecaca;
+  border-left-color: #dc2626;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
 }
 
 .message-warning {
   background: #fef3c7;
   border-left-color: #f59e0b;
   color: #92400e;
+}
+
+.message-info {
+  background: #e0e7ff;
+  border-left-color: #2563eb;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
 }
 
 /* ローディング */

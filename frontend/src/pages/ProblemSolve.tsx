@@ -118,8 +118,11 @@ const ProblemSolve: React.FC = () => {
           code: code,
         }),
       });
-      if (!res.ok) throw new Error("提出に失敗しました");
       const data = await res.json();
+      if (!res.ok) {
+        const errorMsg = data.error || "提出に失敗しました";
+        throw new Error(errorMsg);
+      }
       showSnackbar(
         data.is_correct ? "テストケースに合格しました！" : "テストケースが失敗しました",
         data.is_correct ? "success" : "info"
@@ -144,10 +147,13 @@ const ProblemSolve: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assignment_id: assignment.id, code }),
       });
-      if (!res.ok) throw new Error("実行に失敗しました");
       const data = await res.json();
+      if (!res.ok) {
+        const errorMsg = data.error || "実行に失敗しました";
+        throw new Error(errorMsg);
+      }
       setRunResult(data);
-      showSnackbar(data.all_passed ? "すべてのテストに合格しました (未提出)" : "出力を確認してください", data.all_passed ? "success" : "info");
+      showSnackbar(data.all_passed ? "すべてのテストに合格しました (未提出)" : "出力を確認してください", data.all_passed ? "success" : "error");
     } catch (err: any) {
       const errorMsg = err.message || "実行に失敗しました";
       setError(errorMsg);

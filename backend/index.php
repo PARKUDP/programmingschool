@@ -1239,21 +1239,21 @@ if ($path === '/api/submit' && $method === 'POST') {
         json_response(['error' => 'assignment_id required'], 400);
     }
 
-        $assignment_id = (int)$data['assignment_id'];
-        $stmt = $pdo->prepare('SELECT id, expected_output, input_example, exec_mode, entry_function,
-                                                                    CASE
-                                                                        WHEN EXISTS (SELECT 1 FROM choice_option co WHERE co.assignment_id = assignment.id) THEN "choice"
-                                                                        WHEN assignment.problem_type IS NOT NULL THEN assignment.problem_type
-                                                                        ELSE "code"
-                                                                    END as problem_type
-                                                     FROM assignment WHERE id = ?');
-        $stmt->execute([$assignment_id]);
+    $assignment_id = (int)$data['assignment_id'];
+    $stmt = $pdo->prepare('SELECT id, expected_output, input_example, exec_mode, entry_function, problem_type,
+                           CASE
+                               WHEN EXISTS (SELECT 1 FROM choice_option co WHERE co.assignment_id = a.id) THEN "choice"
+                               WHEN a.problem_type IS NOT NULL THEN a.problem_type
+                               ELSE "code"
+                           END as computed_type
+                           FROM assignment a WHERE id = ?');
+    $stmt->execute([$assignment_id]);
     $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$assignment) {
         json_response(['error' => 'assignment not found'], 404);
     }
 
-    $problem_type = $assignment['problem_type'] ?? 'code';
+    $problem_type = $assignment['computed_type'] ?? 'code';
     $user_id = $current_user['id'];
 
     // 選択式
@@ -1270,8 +1270,8 @@ if ($path === '/api/submit' && $method === 'POST') {
         }
         $is_correct = ((int)$choice['is_correct'] === 1) ? 1 : 0;
         $feedback = $is_correct ? '正解です。' : '不正解です。';
-        $ins = $pdo->prepare('INSERT INTO submission (user_id, assignment_id, selected_choice_id, is_correct, feedback, submitted_at) VALUES (?,?,?,?,?,NOW())');
-        $ins->execute([$user_id, $assignment_id, $selected_choice_id, $is_correct, $feedback]);
+        $ins = $pdo->prepare('INSERT INTO submission (user_id, assignment_id, problem_type, selected_choice_id, is_correct, feedback, submitted_at) VALUES (?,?,?,?,?,?,NOW())');
+        $ins->execute([$user_id, $assignment_id, $problem_type, $selected_choice_id, $is_correct, $feedback]);
         clear_progress_cache_all();
         json_response(['message' => 'Submission processed', 'is_correct' => $is_correct, 'feedback' => $feedback]);
     }
@@ -1282,8 +1282,8 @@ if ($path === '/api/submit' && $method === 'POST') {
             json_response(['error' => 'answer_text required'], 400);
         }
         $answer_text = trim($data['answer_text']);
-        $ins = $pdo->prepare('INSERT INTO submission (user_id, assignment_id, answer_text, is_correct, feedback, submitted_at) VALUES (?,?,?,NULL,NULL,NOW())');
-        $ins->execute([$user_id, $assignment_id, $answer_text]);
+        $ins = $pdo->prepare('INSERT INTO submission (user_id, assignment_id, problem_type, answer_text, is_correct, feedback, submitted_at) VALUES (?,?,?,?,NULL,NULL,NOW())');
+        $ins->execute([$user_id, $assignment_id, $problem_type, $answer_text]);
         clear_progress_cache_all();
         json_response(['message' => 'Essay submitted', 'is_correct' => null]);
     }
@@ -1440,9 +1440,11 @@ PY;
             $input = $case['input'] ?? '';
             exec("echo " . escapeshellarg($input) . " | $cmd", $result);
             $result_text = implode("\n", $result);
-            if (trim($result_text) !== trim($case['expected_output'])) {
+            $expected = (string)($case['expected_output'] ?? '');
+            $passed = outputs_match($expected, $result_text);
+            if (!$passed) {
                 $all_passed = false;
-                $output .= "入力:\n{$case['input']}\n\n期待される出力:\n{$case['expected_output']}\n\nあなたの出力:\n{$result_text}\n\n";
+                $output .= "入力:\n{$case['input']}\n\n期待される出力:\n{$expected}\n\nあなたの出力:\n{$result_text}\n\n";
             }
             unlink($tmp);
             if (!$all_passed) break;
@@ -1473,18 +1475,18 @@ if ($path === '/api/run' && $method === 'POST') {
     }
 
     $assignment_id = (int)$data['assignment_id'];
-    $stmt = $pdo->prepare('SELECT id, expected_output, input_example, exec_mode, entry_function,
-                                                                    CASE
-                                                                        WHEN EXISTS (SELECT 1 FROM choice_option co WHERE co.assignment_id = assignment.id) THEN "choice"
-                                                                        WHEN assignment.problem_type IS NOT NULL THEN assignment.problem_type
-                                                                        ELSE "code"
-                                                                    END as problem_type
-                                                     FROM assignment WHERE id = ?');
+    $stmt = $pdo->prepare('SELECT id, expected_output, input_example, exec_mode, entry_function, problem_type,
+                           CASE
+                               WHEN EXISTS (SELECT 1 FROM choice_option co WHERE co.assignment_id = a.id) THEN "choice"
+                               WHEN a.problem_type IS NOT NULL THEN a.problem_type
+                               ELSE "code"
+                           END as computed_type
+                           FROM assignment a WHERE id = ?');
     $stmt->execute([$assignment_id]);
     $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$assignment) json_response(['error' => 'assignment not found'], 404);
 
-    if (($assignment['problem_type'] ?? 'code') !== 'code') {
+    if (($assignment['computed_type'] ?? 'code') !== 'code') {
         json_response(['error' => 'preview run is only for code assignments'], 400);
     }
 
@@ -1741,7 +1743,7 @@ if (preg_match('#^/api/submissions/(\d+)$#', $path, $m) && $method === 'GET') {
     if ($current_user['id'] != $user_id && empty($current_user['is_admin'])) {
         json_response(['error' => 'forbidden'], 403);
     }
-    $stmt = $pdo->prepare('SELECT id, assignment_id, is_correct, feedback, code, submitted_at FROM submission WHERE user_id = ? ORDER BY submitted_at DESC');
+    $stmt = $pdo->prepare('SELECT id, assignment_id, is_correct, feedback, code, answer_text, selected_choice_id, problem_type, submitted_at FROM submission WHERE user_id = ? ORDER BY submitted_at DESC');
     $stmt->execute([$user_id]);
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
@@ -1754,18 +1756,25 @@ if ($path === '/api/submissions/review' && $method === 'GET') {
     }
 
     $assignment_id = $_GET['assignment_id'] ?? null;
+    $problem_type = $_GET['problem_type'] ?? null;
     $where = [];
     $params = [];
     if ($assignment_id) {
         $where[] = 's.assignment_id = ?';
         $params[] = (int)$assignment_id;
     }
+    if ($problem_type) {
+        $where[] = 'COALESCE(s.problem_type, a.problem_type) = ?';
+        $params[] = $problem_type;
+    }
     $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
-    $sql = "SELECT s.id, s.user_id, s.assignment_id, s.is_correct, s.feedback, s.code, s.submitted_at,
+    $sql = "SELECT s.id, s.user_id, s.assignment_id, s.is_correct, s.feedback, s.code, s.answer_text, s.selected_choice_id, 
+                   COALESCE(s.problem_type, a.problem_type) AS problem_type, s.submitted_at,
                    u.username,
                    a.title AS assignment_title,
-                   a.question_text
+                   a.question_text,
+                   (SELECT option_text FROM choice_option WHERE id = s.selected_choice_id LIMIT 1) AS selected_choice_text
             FROM submission s
             INNER JOIN user u ON s.user_id = u.id
             INNER JOIN assignment a ON s.assignment_id = a.id
@@ -1781,7 +1790,7 @@ if ($path === '/api/submissions' && $method === 'GET') {
     global $current_user;
     $assignment_id = $_GET['assignment_id'] ?? null;
     if ($assignment_id) {
-        $stmt = $pdo->prepare('SELECT id, assignment_id, is_correct, feedback, code, submitted_at FROM submission WHERE assignment_id = ? AND user_id = ? ORDER BY submitted_at DESC');
+        $stmt = $pdo->prepare('SELECT id, assignment_id, is_correct, feedback, code, answer_text, selected_choice_id, problem_type, submitted_at FROM submission WHERE assignment_id = ? AND user_id = ? ORDER BY submitted_at DESC');
         $stmt->execute([(int)$assignment_id, $current_user['id']]);
         json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
@@ -1868,20 +1877,29 @@ if ($path === '/api/progress' && $method === 'GET') {
         $totalStmt->execute([$user_id]);
         $totalSub = (int)$totalStmt->fetchColumn();
 
-        // 正解した異なる課題の数
-        $correctStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment_id) FROM submission WHERE user_id = ? AND is_correct = 1');
-        $correctStmt->execute([$user_id]);
-        $correct = (int)$correctStmt->fetchColumn();
-
-        // 不正解した異なる課題の数
-        $incorrectStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment_id) FROM submission WHERE user_id = ? AND is_correct = 0');
-        $incorrectStmt->execute([$user_id]);
-        $incorrect = (int)$incorrectStmt->fetchColumn();
-
-        // 採点待ち（is_correct = null）の異なる課題の数
-        $pendingStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment_id) FROM submission WHERE user_id = ? AND is_correct IS NULL');
-        $pendingStmt->execute([$user_id]);
-        $pending = (int)$pendingStmt->fetchColumn();
+        // 各課題の最新提出状態を取得（SQLite 互換）
+        $latestSql = 'SELECT assignment_id, is_correct FROM submission 
+                      WHERE user_id = ? AND id IN (
+                        SELECT MAX(id) FROM submission 
+                        WHERE user_id = ? 
+                        GROUP BY assignment_id
+                      )';
+        $latestStmt = $pdo->prepare($latestSql);
+        $latestStmt->execute([$user_id, $user_id]);
+        $latestStatuses = $latestStmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $correct = 0;
+        $incorrect = 0;
+        $pending = 0;
+        foreach ($latestStatuses as $status) {
+            if ($status['is_correct'] === 1 || $status['is_correct'] === '1') {
+                $correct++;
+            } elseif ($status['is_correct'] === 0 || $status['is_correct'] === '0') {
+                $incorrect++;
+            } elseif ($status['is_correct'] === null) {
+                $pending++;
+            }
+        }
 
         // 少なくとも1回提出した異なる課題の数
         $attemptedStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment_id) FROM submission WHERE user_id = ?');
@@ -1903,17 +1921,27 @@ if ($path === '/api/progress' && $method === 'GET') {
         $totalStmt = $pdo->query('SELECT COUNT(*) FROM submission');
         $totalSub = (int)$totalStmt->fetchColumn();
 
-        // 正解した異なる課題の数
-        $correctStmt = $pdo->query('SELECT COUNT(DISTINCT assignment_id) FROM submission WHERE is_correct = 1');
-        $correct = (int)$correctStmt->fetchColumn();
-
-        // 不正解した異なる課題の数
-        $incorrectStmt = $pdo->query('SELECT COUNT(DISTINCT assignment_id) FROM submission WHERE is_correct = 0');
-        $incorrect = (int)$incorrectStmt->fetchColumn();
-
-        // 採点待ち（is_correct = null）の異なる課題の数
-        $pendingStmt = $pdo->query('SELECT COUNT(DISTINCT assignment_id) FROM submission WHERE is_correct IS NULL');
-        $pending = (int)$pendingStmt->fetchColumn();
+        // 全体の最新提出状態を取得（SQLite 互換）
+        $latestSql = 'SELECT assignment_id, user_id, is_correct FROM submission 
+                      WHERE id IN (
+                        SELECT MAX(id) FROM submission 
+                        GROUP BY assignment_id, user_id
+                      )';
+        $latestStmt = $pdo->query($latestSql);
+        $latestStatuses = $latestStmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $correct = 0;
+        $incorrect = 0;
+        $pending = 0;
+        foreach ($latestStatuses as $status) {
+            if ($status['is_correct'] === 1 || $status['is_correct'] === '1') {
+                $correct++;
+            } elseif ($status['is_correct'] === 0 || $status['is_correct'] === '0') {
+                $incorrect++;
+            } elseif ($status['is_correct'] === null) {
+                $pending++;
+            }
+        }
 
         // 少なくとも1回提出した異なる課題の数
         $attemptedStmt = $pdo->query('SELECT COUNT(DISTINCT assignment_id) FROM submission');
