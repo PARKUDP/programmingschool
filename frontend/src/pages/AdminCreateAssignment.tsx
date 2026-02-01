@@ -7,7 +7,16 @@ import { useSnackbar } from "../components/SnackbarContext";
 
 interface Lesson { id: number; title: string; material_id: number; }
 interface Material { id: number; title: string; }
-interface UserItem { id: number; username: string; is_admin?: number; role?: "student" | "teacher" | "admin" }
+interface UserItem { 
+  id: number; 
+  username: string;
+  last_name?: string | null;
+  first_name?: string | null;
+  furigana?: string | null;
+  name?: string | null;
+  is_admin?: number; 
+  role?: "student" | "teacher" | "admin" 
+}
 interface ClassItem { id: number; name: string }
 interface Problem { id: number; title: string; type: string; }
 
@@ -44,7 +53,7 @@ const AdminCreateAssignment: React.FC = () => {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const isEditMode = Boolean(assignmentId);
   const [assignmentLoaded, setAssignmentLoaded] = useState(false);
-  const [targetType, setTargetType] = useState<'all'|'users'|'classes'>('all');
+  const [targetType, setTargetType] = useState<'none'|'all'|'users'|'classes'>('none');
   const [users, setUsers] = useState<UserItem[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
@@ -79,6 +88,18 @@ const AdminCreateAssignment: React.FC = () => {
       .then(data => setClasses(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, [authFetch]);
+
+  // ユーザーの表示名を生成
+  const getUserDisplayName = (u: UserItem) => {
+    if (u.last_name || u.first_name) {
+      const name = `${u.last_name || ""} ${u.first_name || ""}`.trim();
+      if (u.furigana) {
+        return `${name} (${u.furigana})`;
+      }
+      return name;
+    }
+    return u.username;
+  };
 
   // レッスン選択時に問題を取得
   useEffect(() => {
@@ -124,6 +145,38 @@ const AdminCreateAssignment: React.FC = () => {
             setCorrectAnswerIndex(correctIdx >= 0 ? correctIdx : 0);
           }
         }
+
+        // 割り当て情報を読み込む
+        try {
+          const targetsRes = await authFetch(`${apiEndpoints.assignments}/${assignmentId}/targets`);
+          if (targetsRes.ok) {
+            const targetsData = await targetsRes.json();
+            const targets = targetsData.targets || [];
+            
+            if (targets.length === 0) {
+              setTargetType('none');
+              setSelectedUsers([]);
+              setSelectedClasses([]);
+            } else {
+              const firstTarget = targets[0];
+              if (firstTarget.target_type === 'all') {
+                setTargetType('all');
+                setSelectedUsers([]);
+                setSelectedClasses([]);
+              } else if (firstTarget.target_type === 'user') {
+                setTargetType('users');
+                setSelectedUsers(targets.map((t: any) => t.target_id).filter((id: any) => id !== null));
+              } else if (firstTarget.target_type === 'class') {
+                setTargetType('classes');
+                setSelectedClasses(targets.map((t: any) => t.target_id).filter((id: any) => id !== null));
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load targets:', e);
+          // 割り当て情報の読み込みに失敗しても、宿題自体の読み込みは成功した扱いにする
+        }
+
         setAssignmentLoaded(true);
       } catch (err: any) {
         setError(err.message || "宿題の読み込みに失敗しました");
@@ -199,6 +252,23 @@ const AdminCreateAssignment: React.FC = () => {
         });
 
         if (!res.ok) throw new Error("更新に失敗しました");
+        
+        // 割り当て情報を別途更新
+        const targetsPayload = {
+          target_type: targetType,
+          target_ids: targetType === 'users' ? selectedUsers : targetType === 'classes' ? selectedClasses : [],
+        };
+        
+        const targetsRes = await authFetch(`${apiEndpoints.assignments}/${assignmentId}/targets`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(targetsPayload),
+        });
+        
+        if (!targetsRes.ok) {
+          console.warn("割り当て情報の更新に失敗しましたが、宿題情報は更新されました");
+        }
+        
         setMessage("宿題を更新しました");
         showSnackbar("宿題を更新しました", "success");
       } else {
@@ -225,9 +295,13 @@ const AdminCreateAssignment: React.FC = () => {
         }
 
         if (file) form.append("file", file);
-        form.append("target_type", targetType === 'users' ? 'users' : targetType === 'classes' ? 'classes' : 'all');
-        const ids = targetType === 'users' ? selectedUsers : targetType === 'classes' ? selectedClasses : [];
-        form.append("target_ids", JSON.stringify(ids));
+        
+        // 割り当てを含める場合のみ送信
+        if (targetType !== 'none') {
+          form.append("target_type", targetType === 'users' ? 'users' : targetType === 'classes' ? 'classes' : 'all');
+          const ids = targetType === 'users' ? selectedUsers : targetType === 'classes' ? selectedClasses : [];
+          form.append("target_ids", JSON.stringify(ids));
+        }
 
         const res = await authFetch(apiEndpoints.assignments, {
           method: "POST",
@@ -273,269 +347,413 @@ const AdminCreateAssignment: React.FC = () => {
         {/* 入力フォーム */}
         <div className="card">
           <div className="card-title">宿題情報を入力</div>
-          <div className="form-section">
-            <div className="form-group">
-              <label className="form-label">教材</label>
-              <select
-                className="form-select"
-                value={selectedMaterial}
-                onChange={e => {
-                  setSelectedMaterial(Number(e.target.value) || "");
-                  setLessonId(""); // 教材を変更したらレッスンをリセット
-                }}
-                disabled={loading}
-              >
-                <option value="">教材を選択...</option>
-                {materials.map(m => (
-                  <option key={m.id} value={m.id}>{m.title}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">レッスン</label>
-              <select
-                className="form-select"
-                value={lessonId}
-                onChange={e => setLessonId(Number(e.target.value) || "")}
-                onBlur={() => setLessonTouched(true)}
-                disabled={loading || !selectedMaterial}
-                aria-invalid={!lessonValid}
-                aria-describedby="lesson-help"
-              >
-                <option value="">{selectedMaterial ? "レッスンを選択..." : "まず教材を選択してください"}</option>
-                {filteredLessons.map(l => (
-                  <option key={l.id} value={l.id}>{l.title}</option>
-                ))}
-              </select>
-              {(!lessonValid && (lessonTouched || submitAttempted)) && (
-                <div className="message message-error" style={{ marginTop: '.5rem' }}>レッスンを選択してください</div>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">タイトル</label>
-              <input
-                className="form-input"
-                type="text"
-                placeholder="宿題のタイトルを入力"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                onBlur={() => setTitleTouched(true)}
-                disabled={loading}
-                aria-invalid={!titleValid}
-                aria-describedby="title-help"
-              />
-              {(!titleValid && (titleTouched || submitAttempted)) && (
-                <div className="message message-error" style={{ marginTop: '.5rem' }}>タイトルを入力してください</div>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">説明</label>
-              <textarea
-                className="form-textarea"
-                placeholder="宿題の説明を入力"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                disabled={loading}
-                rows={2}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">問題文</label>
-              <textarea
-                className="form-textarea"
-                placeholder="問題文を入力"
-                value={questionText}
-                onChange={e => setQuestionText(e.target.value)}
-                onBlur={() => setQuestionTouched(true)}
-                disabled={loading}
-                rows={3}
-                aria-invalid={!questionValid}
-                aria-describedby="question-help"
-              />
-              {(!questionValid && (questionTouched || submitAttempted)) && (
-                <div className="message message-error" style={{ marginTop: '.5rem' }}>問題文を入力してください</div>
-              )}
-            </div>
-
-            {/* 問題タイプの選択 */}
-            <div className="form-group">
-              <label className="form-label">問題タイプ</label>
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
-                <label>
-                  <input 
-                    type="radio" 
-                    name="problemType" 
-                    value="choice" 
-                    checked={problemType === "choice"}
-                    onChange={() => setProblemType("choice")}
-                  /> 選択式
-                </label>
-                <label>
-                  <input 
-                    type="radio" 
-                    name="problemType" 
-                    value="essay" 
-                    checked={problemType === "essay"}
-                    onChange={() => setProblemType("essay")}
-                  /> 記述式
-                </label>
-                <label>
-                  <input 
-                    type="radio" 
-                    name="problemType" 
-                    value="code" 
-                    checked={problemType === "code"}
-                    onChange={() => setProblemType("code")}
-                  /> コード実行
-                </label>
-              </div>
-            </div>
-
-            {/* 選択式用フォーム */}
-            {problemType === "choice" && (
-              <div className="form-group">
-                <label className="form-label">選択肢</label>
-                {choiceOptions.map((option, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-                    <input
-                      type="radio"
-                      name="correctAnswer"
-                      checked={correctAnswerIndex === idx}
-                      onChange={() => setCorrectAnswerIndex(idx)}
-                      disabled={loading}
-                    />
-                    <input
-                      className="form-input"
-                      type="text"
-                      placeholder={`選択肢 ${idx + 1}`}
-                      value={option}
-                      onChange={(e) => {
-                        const newOptions = [...choiceOptions];
-                        newOptions[idx] = e.target.value;
-                        setChoiceOptions(newOptions);
-                      }}
-                      disabled={loading}
-                      style={{ flex: 1 }}
-                    />
-                    {choiceOptions.length > 2 && (
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => setChoiceOptions(choiceOptions.filter((_, i) => i !== idx))}
-                        disabled={loading}
-                        style={{ padding: '0.5rem 0.75rem', fontSize: '0.9rem' }}
-                      >
-                        削除
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setChoiceOptions([...choiceOptions, ""])}
-                  disabled={loading}
-                  style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
-                >
-                  + 選択肢を追加
-                </button>
-              </div>
-            )}
-
-            {/* 記述式用フォーム */}
-            {problemType === "essay" && (
-              <div className="form-group">
-                <label className="form-label">期待される回答例</label>
-                <textarea
-                  className="form-textarea"
-                  placeholder="学生が答えるべき内容の例を入力"
-                  value={expectedOutput}
-                  onChange={e => setExpectedOutput(e.target.value)}
-                  disabled={loading}
-                  rows={3}
-                />
-                <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.5rem" }}>
-                  ※ これは採点時の参考用です
-                </p>
-              </div>
-            )}
-
-            {/* コード実行用フォーム */}
-            {problemType === "code" && (
-              <>
+          
+          {/* セクション1: 基本情報 */}
+          <div style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: '600', marginBottom: '1rem', color: 'var(--text-primary)' }}>1. 教材・レッスン選択</h4>
+              <div className="form-section">
                 <div className="form-group">
-                  <label className="form-label">入力例</label>
+                  <label className="form-label">教材</label>
+                  <select
+                    className="form-select"
+                    value={selectedMaterial}
+                    onChange={e => {
+                      setSelectedMaterial(Number(e.target.value) || "");
+                      setLessonId(""); // 教材を変更したらレッスンをリセット
+                    }}
+                    disabled={loading}
+                  >
+                    <option value="">教材を選択...</option>
+                    {materials.map(m => (
+                      <option key={m.id} value={m.id}>{m.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">レッスン</label>
+                  <select
+                    className="form-select"
+                    value={lessonId}
+                    onChange={e => setLessonId(Number(e.target.value) || "")}
+                    onBlur={() => setLessonTouched(true)}
+                    disabled={loading || !selectedMaterial}
+                    aria-invalid={!lessonValid}
+                    aria-describedby="lesson-help"
+                  >
+                    <option value="">{selectedMaterial ? "レッスンを選択..." : "まず教材を選択してください"}</option>
+                    {filteredLessons.map(l => (
+                      <option key={l.id} value={l.id}>{l.title}</option>
+                    ))}
+                  </select>
+                  {(!lessonValid && (lessonTouched || submitAttempted)) && (
+                    <div className="message message-error" style={{ marginTop: '.5rem' }}>レッスンを選択してください</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: '600', marginBottom: '1rem', color: 'var(--text-primary)' }}>2. 宿題の基本情報</h4>
+              <div className="form-section">
+                <div className="form-group">
+                  <label className="form-label">タイトル</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    placeholder="宿題のタイトルを入力"
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    onBlur={() => setTitleTouched(true)}
+                    disabled={loading}
+                    aria-invalid={!titleValid}
+                    aria-describedby="title-help"
+                  />
+                  {(!titleValid && (titleTouched || submitAttempted)) && (
+                    <div className="message message-error" style={{ marginTop: '.5rem' }}>タイトルを入力してください</div>
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">説明</label>
                   <textarea
                     className="form-textarea"
-                    placeholder="入力例を入力"
-                    value={inputExample}
-                    onChange={e => setInputExample(e.target.value)}
+                    placeholder="宿題の説明を入力"
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
                     disabled={loading}
                     rows={2}
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* セクション2: 問題タイプ選択 */}
+          <div style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--border)' }}>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: '600', marginBottom: '1rem', color: 'var(--text-primary)' }}>3. 問題タイプ選択</h4>
+            <div className="form-section">
+              <div className="form-group">
+                <label className="form-label">問題タイプ</label>
+                <div style={{ display: 'flex', gap: '1.5rem', padding: '1rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '0.5rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="problemType" 
+                      value="choice" 
+                      checked={problemType === "choice"}
+                      onChange={() => setProblemType("choice")}
+                      style={{ cursor: 'pointer' }}
+                    /> 選択式
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="problemType" 
+                      value="essay" 
+                      checked={problemType === "essay"}
+                      onChange={() => setProblemType("essay")}
+                      style={{ cursor: 'pointer' }}
+                    /> 記述式
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="problemType" 
+                      value="code" 
+                      checked={problemType === "code"}
+                      onChange={() => setProblemType("code")}
+                      style={{ cursor: 'pointer' }}
+                    /> コード実行
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* セクション3: 問題内容 */}
+          <div style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--border)' }}>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: '600', marginBottom: '1rem', color: 'var(--text-primary)' }}>4. 問題内容</h4>
+            <div className="form-section">
+              <div className="form-group">
+                <label className="form-label">問題文</label>
+                <textarea
+                  className="form-textarea"
+                  placeholder="問題文を入力"
+                  value={questionText}
+                  onChange={e => setQuestionText(e.target.value)}
+                  onBlur={() => setQuestionTouched(true)}
+                  disabled={loading}
+                  rows={3}
+                  aria-invalid={!questionValid}
+                  aria-describedby="question-help"
+                />
+                {(!questionValid && (questionTouched || submitAttempted)) && (
+                  <div className="message message-error" style={{ marginTop: '.5rem' }}>問題文を入力してください</div>
+                )}
+              </div>
+
+              {/* 選択式用フォーム */}
+              {problemType === "choice" && (
                 <div className="form-group">
-                  <label className="form-label">期待される出力</label>
+                  <label className="form-label">選択肢</label>
+                  {choiceOptions.map((option, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                      <input
+                        type="radio"
+                        name="correctAnswer"
+                        checked={correctAnswerIndex === idx}
+                        onChange={() => setCorrectAnswerIndex(idx)}
+                        disabled={loading}
+                        style={{ cursor: 'pointer' }}
+                        title="正解を選択"
+                      />
+                      <input
+                        className="form-input"
+                        type="text"
+                        placeholder={`選択肢 ${idx + 1}`}
+                        value={option}
+                        onChange={(e) => {
+                          const newOptions = [...choiceOptions];
+                          newOptions[idx] = e.target.value;
+                          setChoiceOptions(newOptions);
+                        }}
+                        disabled={loading}
+                        style={{ flex: 1 }}
+                      />
+                      {choiceOptions.length > 2 && (
+                        <button
+                          className="btn btn-danger"
+                          onClick={() => setChoiceOptions(choiceOptions.filter((_, i) => i !== idx))}
+                          disabled={loading}
+                          style={{ padding: '0.5rem 0.75rem', fontSize: '0.9rem' }}
+                        >
+                          削除
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setChoiceOptions([...choiceOptions, ""])}
+                    disabled={loading}
+                    style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
+                  >
+                    + 選択肢を追加
+                  </button>
+                </div>
+              )}
+
+              {/* 記述式用フォーム */}
+              {problemType === "essay" && (
+                <div className="form-group">
+                  <label className="form-label">期待される回答例</label>
                   <textarea
                     className="form-textarea"
-                    placeholder="期待される出力結果を入力"
+                    placeholder="学生が答えるべき内容の例を入力"
                     value={expectedOutput}
                     onChange={e => setExpectedOutput(e.target.value)}
                     disabled={loading}
-                    rows={2}
+                    rows={3}
                   />
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.5rem" }}>
+                    ※ これは採点時の参考用です
+                  </p>
                 </div>
-              </>
-            )}
-
-            <div className="form-group">
-              <label className="form-label">配布対象</label>
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
-                <label><input type="radio" name="target" value="all" checked={targetType==='all'} onChange={()=>setTargetType('all')} /> 全体</label>
-                <label><input type="radio" name="target" value="users" checked={targetType==='users'} onChange={()=>setTargetType('users')} /> ユーザーを選択</label>
-                <label><input type="radio" name="target" value="classes" checked={targetType==='classes'} onChange={()=>setTargetType('classes')} /> クラスを選択</label>
-              </div>
-              {targetType === 'users' && (
-                <select multiple className="form-select" style={{ minHeight: 140 }}
-                  value={selectedUsers.map(String)}
-                  onChange={e => {
-                    const opts = Array.from(e.target.selectedOptions).map(o=>Number(o.value));
-                    setSelectedUsers(opts);
-                  }}
-                  disabled={loading}
-                >
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.username}</option>
-                  ))}
-                </select>
               )}
-              {targetType === 'classes' && (
-                <select multiple className="form-select" style={{ minHeight: 140 }}
-                  value={selectedClasses.map(String)}
-                  onChange={e => {
-                    const opts = Array.from(e.target.selectedOptions).map(o=>Number(o.value));
-                    setSelectedClasses(opts);
-                  }}
-                  disabled={loading}
-                >
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+
+              {/* コード実行用フォーム */}
+              {problemType === "code" && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">入力例</label>
+                    <textarea
+                      className="form-textarea"
+                      placeholder="入力例を入力"
+                      value={inputExample}
+                      onChange={e => setInputExample(e.target.value)}
+                      disabled={loading}
+                      rows={2}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">期待される出力</label>
+                    <textarea
+                      className="form-textarea"
+                      placeholder="期待される出力結果を入力"
+                      value={expectedOutput}
+                      onChange={e => setExpectedOutput(e.target.value)}
+                      disabled={loading}
+                      rows={2}
+                    />
+                  </div>
+                </div>
               )}
             </div>
+          </div>
 
-            <div className="form-group">
-              <label className="form-label">ファイル（オプション）</label>
-              <input
-                className="form-input"
-                type="file"
-                onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
-                disabled={loading || isEditMode}
-              />
-              {file && <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>{file.name}</p>}
+          {/* セクション4: 配布・ファイル設定 */}
+          <div style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--border)' }}>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: '600', marginBottom: '1rem', color: 'var(--text-primary)' }}>5. 配布・ファイル設定</h4>
+            <div className="form-section">
+              {/* 配布対象セクション */}
+              <div className="form-group">
+                <label className="form-label">配布対象（オプション）</label>
+                
+                {/* ラジオボタン選択 */}
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', 
+                  gap: '1rem', 
+                  marginBottom: '1.5rem',
+                  padding: '1rem',
+                  backgroundColor: 'var(--bg-secondary)',
+                  borderRadius: '0.5rem'
+                }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input type="radio" name="target" value="none" checked={targetType==='none'} onChange={()=>setTargetType('none' as any)} style={{ cursor: 'pointer' }} />
+                    <span>割り当てなし</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input type="radio" name="target" value="all" checked={targetType==='all'} onChange={()=>setTargetType('all')} style={{ cursor: 'pointer' }} />
+                    <span>全体</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input type="radio" name="target" value="users" checked={targetType==='users'} onChange={()=>setTargetType('users')} style={{ cursor: 'pointer' }} />
+                    <span>ユーザーを選択</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input type="radio" name="target" value="classes" checked={targetType==='classes'} onChange={()=>setTargetType('classes')} style={{ cursor: 'pointer' }} />
+                    <span>クラスを選択</span>
+                  </label>
+                </div>
+
+                {/* ユーザー選択：チェックボックス形式 */}
+                {targetType === 'users' && (
+                  <div style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: '0.5rem',
+                    backgroundColor: 'var(--bg-secondary)',
+                    padding: '1rem',
+                    maxHeight: '300px',
+                    overflowY: 'auto'
+                  }}>
+                    <div style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                      {selectedUsers.length} 人選択
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {users.map(u => (
+                        <label key={u.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.75rem',
+                          padding: '0.75rem',
+                          backgroundColor: 'var(--bg-primary)',
+                          borderRadius: '0.375rem',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s',
+                          border: selectedUsers.includes(u.id) ? '1px solid var(--primary)' : '1px solid transparent'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!selectedUsers.includes(u.id)) {
+                            e.currentTarget.style.backgroundColor = 'rgba(102, 126, 234, 0.05)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!selectedUsers.includes(u.id)) {
+                            e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
+                          }
+                        }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedUsers.includes(u.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedUsers([...selectedUsers, u.id]);
+                              } else {
+                                setSelectedUsers(selectedUsers.filter(id => id !== u.id));
+                              }
+                            }}
+                            disabled={loading}
+                            style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                          />
+                          <span>{getUserDisplayName(u)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* クラス選択：チェックボックス形式 */}
+                {targetType === 'classes' && (
+                  <div style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: '0.5rem',
+                    backgroundColor: 'var(--bg-secondary)',
+                    padding: '1rem',
+                    maxHeight: '300px',
+                    overflowY: 'auto'
+                  }}>
+                    <div style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                      {selectedClasses.length} クラス選択
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {classes.map(c => (
+                        <label key={c.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.75rem',
+                          padding: '0.75rem',
+                          backgroundColor: 'var(--bg-primary)',
+                          borderRadius: '0.375rem',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s',
+                          border: selectedClasses.includes(c.id) ? '1px solid var(--primary)' : '1px solid transparent'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!selectedClasses.includes(c.id)) {
+                            e.currentTarget.style.backgroundColor = 'rgba(102, 126, 234, 0.05)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!selectedClasses.includes(c.id)) {
+                            e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
+                          }
+                        }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedClasses.includes(c.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedClasses([...selectedClasses, c.id]);
+                              } else {
+                                setSelectedClasses(selectedClasses.filter(id => id !== c.id));
+                              }
+                            }}
+                            disabled={loading}
+                            style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                          />
+                          <span>{c.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">ファイル（オプション）</label>
+                <input
+                  className="form-input"
+                  type="file"
+                  onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
+                  disabled={loading || isEditMode}
+                />
+                {file && <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>{file.name}</p>}
+              </div>
             </div>
           </div>
         </div>

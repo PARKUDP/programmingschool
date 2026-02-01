@@ -88,7 +88,12 @@ const AdminAssignmentList: React.FC = () => {
       } else {
         // 割り当て管理タブ
         const res = await authFetch(`${apiEndpoints.assignments}/assigned`);
-        if (!res.ok) throw new Error("割り当て済み宿題の取得に失敗しました");
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          const errorMsg = errorData?.error || `HTTP ${res.status}`;
+          console.error('Failed to fetch assigned assignments:', res.status, errorData);
+          throw new Error(`割り当て済み宿題の取得に失敗しました: ${errorMsg}`);
+        }
         const data = await res.json();
         setAssignedAssignments(data.assigned || []);
       }
@@ -224,16 +229,6 @@ const AdminAssignmentList: React.FC = () => {
         <p className="message message-error">権限がありません</p>
       </div>
     );
-        <ConfirmDialog
-          isOpen={confirmDialog.isOpen}
-          title={confirmDialog.title}
-          message={confirmDialog.message}
-          confirmText="解除する"
-          cancelText="キャンセル"
-          isDangerous
-          onConfirm={confirmUnassign}
-          onCancel={closeConfirm}
-        />
   }
 
   if (loading) {
@@ -249,6 +244,17 @@ const AdminAssignmentList: React.FC = () => {
 
   return (
     <div className="page-container">
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="解除する"
+        cancelText="キャンセル"
+        isDangerous
+        onConfirm={confirmUnassign}
+        onCancel={closeConfirm}
+      />
+
       <PageHeader
         title="宿題管理"
         subtitle="作成した宿題を管理します"

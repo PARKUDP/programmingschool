@@ -8,6 +8,10 @@ import EmptyState from "../components/EmptyState";
 interface UserItem {
   id: number;
   username: string;
+  name?: string | null;
+  last_name?: string | null;
+  first_name?: string | null;
+  furigana?: string | null;
   is_admin: number;
   class_names: string | null;
 }
@@ -82,6 +86,8 @@ const AdminUserList: React.FC = () => {
         <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
+              <th>氏名</th>
+              <th>ふりがな</th>
               <th>ユーザー名</th>
               <th>権限</th>
               <th>所属クラス</th>
@@ -91,6 +97,18 @@ const AdminUserList: React.FC = () => {
           <tbody>
             {users.map((u) => (
               <tr key={u.id} style={{ opacity: u.id === user.id ? 0.6 : 1 }}>
+                <td>
+                  <strong>
+                    {u.last_name || u.first_name ? (
+                      <>{u.last_name} {u.first_name}</>
+                    ) : (
+                      <span style={{ color: "var(--text-tertiary, #6b7280)" }}>(未設定)</span>
+                    )}
+                  </strong>
+                </td>
+                <td style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                  {u.furigana || <span style={{ color: "var(--text-tertiary, #6b7280)" }}>未設定</span>}
+                </td>
                 <td>{u.username}</td>
                 <td>{u.is_admin ? "管理者" : "一般"}</td>
                 <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>

@@ -15,6 +15,10 @@ interface ClassItem {
 interface UserItem {
   id: number;
   username: string;
+  name?: string | null;
+  last_name?: string | null;
+  first_name?: string | null;
+  furigana?: string | null;
   is_admin: number;
   role?: "student" | "teacher" | "admin";
   class_name?: string | null;
@@ -54,6 +58,17 @@ const AdminUserManagement: React.FC = () => {
     id: number | null;
     username?: string;
   }>({ isOpen: false, type: null, id: null });
+
+  // User edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    last_name: "",
+    first_name: "",
+    furigana: "",
+    role: "student" as "student" | "teacher" | "admin",
+    password: "",
+  });
 
   useEffect(() => {
     if (!isStaff) return;
@@ -123,6 +138,54 @@ const AdminUserManagement: React.FC = () => {
       !u.class_name // 他のクラスに所属していない
     );
   }, [allUsers, members]);
+
+  // ユーザー編集ダイアログを開く
+  const handleOpenEditDialog = (u: UserItem) => {
+    setEditingUser(u);
+    setEditFormData({
+      last_name: u.last_name || "",
+      first_name: u.first_name || "",
+      furigana: u.furigana || "",
+      role: (u.role || "student") as "student" | "teacher" | "admin",
+      password: "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  // ユーザー編集を保存
+  const handleSaveUserEdit = async () => {
+    if (!editingUser) return;
+    
+    setError("");
+    setMessage("");
+
+    try {
+      const res = await authFetch(`${apiEndpoints.users}/${editingUser.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          last_name: editFormData.last_name,
+          first_name: editFormData.first_name,
+          furigana: editFormData.furigana,
+          role: editFormData.role,
+          ...(editFormData.password && { password: editFormData.password }),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "ユーザー情報の更新に失敗しました");
+      }
+
+      setMessage("ユーザー情報を更新しました");
+      setEditDialogOpen(false);
+      loadData(); // データを再読み込み
+      showSnackbar("ユーザー情報を更新しました", "success");
+    } catch (e: any) {
+      setError(e.message);
+      showSnackbar(e.message, "error");
+    }
+  };
 
   const handleCreateClass = async () => {
     setError("");
@@ -357,6 +420,8 @@ const AdminUserManagement: React.FC = () => {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid var(--border)" }}>
+                  <th style={{ padding: "1rem", textAlign: "left", color: "var(--text-secondary)" }}>氏名</th>
+                  <th style={{ padding: "1rem", textAlign: "left", color: "var(--text-secondary)" }}>ふりがな</th>
                   <th style={{ padding: "1rem", textAlign: "left", color: "var(--text-secondary)" }}>ユーザー名</th>
                   <th style={{ padding: "1rem", textAlign: "left", color: "var(--text-secondary)" }}>ロール</th>
                   <th style={{ padding: "1rem", textAlign: "left", color: "var(--text-secondary)" }}>所属クラス</th>
@@ -366,7 +431,17 @@ const AdminUserManagement: React.FC = () => {
               <tbody>
                 {allUsers.map((u) => (
                   <tr key={u.id} style={{ borderBottom: "1px solid var(--border)", opacity: u.id === user.id ? 0.6 : 1 }}>
-                    <td style={{ padding: "1rem", fontWeight: "600" }}>{u.username}</td>
+                    <td style={{ padding: "1rem", fontWeight: "600" }}>
+                      {u.last_name || u.first_name ? (
+                        <>{u.last_name} {u.first_name}</>
+                      ) : (
+                        <span style={{ color: "var(--text-tertiary, #6b7280)" }}>(未設定)</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "1rem", fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                      {u.furigana || <span style={{ color: "var(--text-tertiary, #6b7280)" }}>未設定</span>}
+                    </td>
+                    <td style={{ padding: "1rem" }}>{u.username}</td>
                     <td style={{ padding: "1rem" }}>
                       <span
                         style={{
@@ -385,6 +460,13 @@ const AdminUserManagement: React.FC = () => {
                       {u.class_name || <span style={{ color: "var(--text-tertiary, #6b7280)" }}>未所属</span>}
                     </td>
                     <td style={{ padding: "1rem", textAlign: "center" }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => handleOpenEditDialog(u)}
+                        style={{ fontSize: "0.85rem", padding: "0.4rem 1rem", marginRight: "0.5rem" }}
+                      >
+                        編集
+                      </button>
                       <button
                         className="btn btn-danger"
                         onClick={() => handleDeleteUser(u.id, u.username)}
@@ -549,7 +631,17 @@ const AdminUserManagement: React.FC = () => {
                         }}
                       >
                         <div>
-                          <div style={{ fontWeight: "600", fontSize: "0.95rem" }}>{m.username}</div>
+                          <div style={{ fontWeight: "600", fontSize: "0.95rem" }}>
+                            {m.last_name || m.first_name ? (
+                              <>{m.last_name} {m.first_name}</>
+                            ) : (
+                              <span style={{ color: "var(--text-tertiary, #6b7280)" }}>(未設定)</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{m.username}</div>
+                          {m.furigana && (
+                            <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{m.furigana}</div>
+                          )}
                           <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{getRoleLabel(m)}</div>
                         </div>
                         <button
@@ -599,7 +691,17 @@ const AdminUserManagement: React.FC = () => {
                             }}
                           />
                           <div>
-                            <div style={{ fontWeight: "600", fontSize: "0.95rem" }}>{u.username}</div>
+                            <div style={{ fontWeight: "600", fontSize: "0.95rem" }}>
+                              {u.last_name || u.first_name ? (
+                                <>{u.last_name} {u.first_name}</>
+                              ) : (
+                                <span style={{ color: "var(--text-tertiary, #6b7280)" }}>(未設定)</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{u.username}</div>
+                            {u.furigana && (
+                              <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{u.furigana}</div>
+                            )}
                             <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{getRoleLabel(u)}</div>
                           </div>
                         </label>
@@ -639,6 +741,195 @@ const AdminUserManagement: React.FC = () => {
         onConfirm={confirmDelete}
         onCancel={() => setConfirmDialog({ isOpen: false, type: null, id: null })}
       />
+
+      {/* ユーザー編集ダイアログ */}
+      {editDialogOpen && editingUser && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setEditDialogOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "8px",
+              padding: "2rem",
+              maxWidth: "500px",
+              width: "90%",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginBottom: "1.5rem", color: "var(--text-primary)" }}>
+              ユーザー編集: {editingUser.username}
+            </h2>
+
+            {error && (
+              <div
+                style={{
+                  backgroundColor: "#fee",
+                  color: "#c00",
+                  padding: "0.75rem",
+                  borderRadius: "4px",
+                  marginBottom: "1rem",
+                  fontSize: "0.9rem",
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveUserEdit();
+              }}
+              style={{ display: "grid", gap: "1rem" }}
+            >
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                  姓
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.last_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, last_name: e.target.value })}
+                  placeholder="山田"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "4px",
+                    fontSize: "1rem",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                  名
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.first_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, first_name: e.target.value })}
+                  placeholder="太郎"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "4px",
+                    fontSize: "1rem",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                  ふりがな
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.furigana}
+                  onChange={(e) => setEditFormData({ ...editFormData, furigana: e.target.value })}
+                  placeholder="やまだたろう"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "4px",
+                    fontSize: "1rem",
+                  }}
+                />
+              </div>
+
+              {user?.is_admin && editingUser.id !== user.id && (
+                <>
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                      ロール
+                    </label>
+                    <select
+                      value={editFormData.role}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          role: e.target.value as "student" | "teacher" | "admin",
+                        })
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        fontSize: "1rem",
+                      }}
+                    >
+                      <option value="student">生徒</option>
+                      <option value="teacher">先生</option>
+                      <option value="admin">管理者</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                      新しいパスワード (空白で変更なし)
+                    </label>
+                    <input
+                      type="password"
+                      value={editFormData.password}
+                      onChange={(e) => setEditFormData({ ...editFormData, password: e.target.value })}
+                      placeholder="パスワード"
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        fontSize: "1rem",
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                >
+                  保存
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditDialogOpen(false)}
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem 1.5rem",
+                    backgroundColor: "#f0f0f0",
+                    border: "1px solid #ddd",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "1rem",
+                  }}
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

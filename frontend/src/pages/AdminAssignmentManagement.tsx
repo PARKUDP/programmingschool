@@ -22,6 +22,10 @@ interface ClassItem {
 interface UserItem {
   id: number;
   username: string;
+  last_name?: string | null;
+  first_name?: string | null;
+  furigana?: string | null;
+  name?: string | null;
   role?: "student" | "teacher" | "admin";
   is_admin?: number;
 }
@@ -42,7 +46,7 @@ const AdminAssignmentManagement: React.FC = () => {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [targetType, setTargetType] = useState<"all" | "users" | "classes">("all");
+  const [targetType, setTargetType] = useState<"none" | "all" | "users" | "classes">("all");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   useEffect(() => {
@@ -74,13 +78,22 @@ const AdminAssignmentManagement: React.FC = () => {
       setUsers((uData || []).filter((u: UserItem) => isStudent(u)));
       
       const targets: Target[] = tData.targets || [];
-      if (targets.length === 0 || targets[0].target_type === "all") {
+      console.log('API Response - targets:', targets, 'tData:', tData);
+      if (targets.length === 0) {
+        // 割り当てがない場合
+        console.log('Setting targetType to none because targets is empty');
+        setTargetType("none");
+        setSelectedIds([]);
+      } else if (targets[0].target_type === "all") {
+        console.log('Setting targetType to all');
         setTargetType("all");
         setSelectedIds([]);
       } else if (targets[0].target_type === "user") {
+        console.log('Setting targetType to users with ids:', targets.map((t) => t.target_id));
         setTargetType("users");
         setSelectedIds(targets.map((t) => t.target_id!).filter((id) => id !== null));
       } else if (targets[0].target_type === "class") {
+        console.log('Setting targetType to classes with ids:', targets.map((t) => t.target_id));
         setTargetType("classes");
         setSelectedIds(targets.map((t) => t.target_id!).filter((id) => id !== null));
       }
@@ -94,22 +107,42 @@ const AdminAssignmentManagement: React.FC = () => {
   const handleUpdateTargets = async () => {
     if (!assignmentId) return;
     try {
+      const payload = {
+        target_type: targetType,
+        target_ids: targetType === "all" ? [] : selectedIds,
+      };
+      console.log('Sending PUT request with payload:', payload, 'assignmentId:', assignmentId);
       const res = await authFetch(`${apiEndpoints.assignments}/${assignmentId}/targets`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          target_type: targetType,
-          target_ids: targetType === "all" ? [] : selectedIds,
-        }),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("更新に失敗しました");
+      console.log('PUT response status:', res.status);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(`Update failed: ${res.status} - ${errorData.error || 'Unknown error'}`);
+      }
       showSnackbar("割り当て先を更新しました", "success");
       navigate("/admin/assignments");
     } catch (e: any) {
+      console.error('Update error:', e);
       setError((e.message || "更新に失敗しました"));
       showSnackbar("更新に失敗しました", "error");
     }
   };
+
+  // ユーザーの表示名を生成
+  const getUserDisplayName = (u: UserItem) => {
+    if (u.last_name || u.first_name) {
+      const name = `${u.last_name || ""} ${u.first_name || ""}`.trim();
+      if (u.furigana) {
+        return `${name} (${u.furigana})`;
+      }
+      return name;
+    }
+    return u.username;
+  };
+
 
   if (!isStaff) {
     return (
@@ -153,63 +186,285 @@ const AdminAssignmentManagement: React.FC = () => {
         <div className="form-section">
           <div className="form-group">
             <label className="form-label">割り当て対象</label>
-            <select
-              className="form-select"
-              value={targetType}
-              onChange={(e) => {
-                setTargetType(e.target.value as "all" | "users" | "classes");
-                setSelectedIds([]);
-              }}
-            >
-              <option value="all">全員</option>
-              <option value="users">特定のユーザー</option>
-              <option value="classes">特定のクラス</option>
-            </select>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', 
+              gap: '1rem', 
+              marginBottom: '1rem',
+              padding: '1rem',
+              backgroundColor: 'var(--bg-secondary)',
+              borderRadius: '0.5rem'
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input 
+                  type="radio" 
+                  name="targetType" 
+                  value="none" 
+                  checked={targetType === "none"}
+                  onChange={(e) => {
+                    setTargetType(e.target.value as "none" | "all" | "users" | "classes");
+                    setSelectedIds([]);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>割り当てなし</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input 
+                  type="radio" 
+                  name="targetType" 
+                  value="all" 
+                  checked={targetType === "all"}
+                  onChange={(e) => {
+                    setTargetType(e.target.value as "none" | "all" | "users" | "classes");
+                    setSelectedIds([]);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>全員</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input 
+                  type="radio" 
+                  name="targetType" 
+                  value="users" 
+                  checked={targetType === "users"}
+                  onChange={(e) => {
+                    setTargetType(e.target.value as "none" | "all" | "users" | "classes");
+                    setSelectedIds([]);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>特定のユーザー</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input 
+                  type="radio" 
+                  name="targetType" 
+                  value="classes" 
+                  checked={targetType === "classes"}
+                  onChange={(e) => {
+                    setTargetType(e.target.value as "none" | "all" | "users" | "classes");
+                    setSelectedIds([]);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>特定のクラス</span>
+              </label>
+            </div>
           </div>
 
           {targetType === "users" && (
             <div className="form-group">
               <label className="form-label">ユーザーを選択（複数選択可）</label>
-              <select
-                multiple
-                className="form-select"
-                style={{ minHeight: "200px" }}
-                value={selectedIds.map(String)}
-                onChange={(e) => {
-                  const ids = Array.from(e.target.selectedOptions).map((o) => Number(o.value));
-                  setSelectedIds(ids);
-                }}
-              >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.username}
-                  </option>
-                ))}
-              </select>
-              <span className="help-text">Ctrl/Cmd + クリックで複数選択</span>
+              
+              {/* 選択済みユーザーのバッジ表示 */}
+              {selectedIds.length > 0 && (
+                <div style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                  marginBottom: "1rem",
+                  padding: "0.75rem",
+                  backgroundColor: "#f3f4f6",
+                  borderRadius: "0.5rem"
+                }}>
+                  {selectedIds.map(id => {
+                    const user = users.find(u => u.id === id);
+                    return user ? (
+                      <div
+                        key={id}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          padding: "0.5rem 0.75rem",
+                          backgroundColor: "#ec4899",
+                          color: "white",
+                          borderRadius: "2rem",
+                          fontSize: "0.9rem",
+                          fontWeight: "500"
+                        }}
+                      >
+                        <span>{getUserDisplayName(user)}</span>
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              )}
+
+              {/* チェックボックスリスト */}
+              <div style={{
+                border: "1px solid var(--border)",
+                borderRadius: "0.5rem",
+                padding: "0.75rem",
+                backgroundColor: "#f9fafb",
+                maxHeight: "300px",
+                overflowY: "auto"
+              }}>
+                {users.length === 0 ? (
+                  <p style={{ color: "var(--text-secondary)", margin: 0, padding: "0.5rem" }}>
+                    利用可能なユーザーはありません
+                  </p>
+                ) : (
+                  users.map((u) => (
+                    <label
+                      key={u.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.75rem",
+                        padding: "0.5rem",
+                        cursor: "pointer",
+                        borderRadius: "0.25rem",
+                        transition: "background-color 0.2s",
+                        backgroundColor: selectedIds.includes(u.id) ? "#dbeafe" : "transparent"
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!selectedIds.includes(u.id)) {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = "#f3f4f6";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!selectedIds.includes(u.id)) {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                        }
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(u.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds([...selectedIds, u.id]);
+                          } else {
+                            setSelectedIds(selectedIds.filter(id => id !== u.id));
+                          }
+                        }}
+                        style={{
+                          width: "18px",
+                          height: "18px",
+                          cursor: "pointer",
+                          accentColor: "var(--primary)"
+                        }}
+                      />
+                      <span style={{ fontSize: "0.95rem", userSelect: "none" }}>
+                        {getUserDisplayName(u)}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+              <span className="help-text" style={{ marginTop: "0.5rem", display: "block" }}>
+                ユーザー名をクリックして選択/選択解除
+              </span>
             </div>
           )}
 
           {targetType === "classes" && (
             <div className="form-group">
               <label className="form-label">クラスを選択（複数選択可）</label>
-              <select
-                multiple
-                className="form-select"
-                style={{ minHeight: "200px" }}
-                value={selectedIds.map(String)}
-                onChange={(e) => {
-                  const ids = Array.from(e.target.selectedOptions).map((o) => Number(o.value));
-                  setSelectedIds(ids);
-                }}
-              >
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <span className="help-text">Ctrl/Cmd + クリックで複数選択</span>
+              
+              {/* 選択済みクラスのバッジ表示 */}
+              {selectedIds.length > 0 && (
+                <div style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                  marginBottom: "1rem",
+                  padding: "0.75rem",
+                  backgroundColor: "#f3f4f6",
+                  borderRadius: "0.5rem"
+                }}>
+                  {selectedIds.map(id => {
+                    const cls = classes.find(c => c.id === id);
+                    return cls ? (
+                      <div
+                        key={id}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          padding: "0.5rem 0.75rem",
+                          backgroundColor: "#3b82f6",
+                          color: "white",
+                          borderRadius: "2rem",
+                          fontSize: "0.9rem",
+                          fontWeight: "500"
+                        }}
+                      >
+                        <span>{cls.name}</span>
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              )}
+
+              {/* チェックボックスリスト */}
+              <div style={{
+                border: "1px solid var(--border)",
+                borderRadius: "0.5rem",
+                padding: "0.75rem",
+                backgroundColor: "#f9fafb",
+                maxHeight: "300px",
+                overflowY: "auto"
+              }}>
+                {classes.length === 0 ? (
+                  <p style={{ color: "var(--text-secondary)", margin: 0, padding: "0.5rem" }}>
+                    利用可能なクラスはありません
+                  </p>
+                ) : (
+                  classes.map((c) => (
+                    <label
+                      key={c.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.75rem",
+                        padding: "0.5rem",
+                        cursor: "pointer",
+                        borderRadius: "0.25rem",
+                        transition: "background-color 0.2s",
+                        backgroundColor: selectedIds.includes(c.id) ? "#dbeafe" : "transparent"
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!selectedIds.includes(c.id)) {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = "#f3f4f6";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!selectedIds.includes(c.id)) {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                        }
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(c.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds([...selectedIds, c.id]);
+                          } else {
+                            setSelectedIds(selectedIds.filter(id => id !== c.id));
+                          }
+                        }}
+                        style={{
+                          width: "18px",
+                          height: "18px",
+                          cursor: "pointer",
+                          accentColor: "var(--primary)"
+                        }}
+                      />
+                      <span style={{ fontSize: "0.95rem", userSelect: "none" }}>
+                        {c.name}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+              <span className="help-text" style={{ marginTop: "0.5rem", display: "block" }}>
+                クラス名をクリックして選択/選択解除
+              </span>
             </div>
           )}
 

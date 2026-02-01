@@ -9,7 +9,6 @@ USE programmingschool;
 SET GLOBAL innodb_buffer_pool_size = 536870912; -- 512MB
 SET GLOBAL max_connections = 500;
 SET GLOBAL innodb_flush_log_at_trx_commit = 2;
-SET GLOBAL query_cache_size = 67108864; -- 64MB (MySQL 5.7以前)
 
 -- ユーザーテーブル
 CREATE TABLE IF NOT EXISTS user (
@@ -19,6 +18,10 @@ CREATE TABLE IF NOT EXISTS user (
     role ENUM('student', 'teacher', 'admin') DEFAULT 'student',
     is_admin TINYINT(1) DEFAULT 0,
     class_id INT DEFAULT NULL,
+    name VARCHAR(200),
+    last_name VARCHAR(100),
+    first_name VARCHAR(100),
+    furigana VARCHAR(200),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_username (username),
     INDEX idx_role (role),
@@ -106,6 +109,7 @@ CREATE TABLE IF NOT EXISTS assignment (
     input_example TEXT,
     expected_output TEXT,
     file_path VARCHAR(500),
+    problem_type ENUM('code', 'choice', 'essay') DEFAULT 'code',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (lesson_id) REFERENCES lesson(id) ON DELETE CASCADE,
     INDEX idx_lesson_id (lesson_id)
@@ -118,6 +122,18 @@ CREATE TABLE IF NOT EXISTS test_case (
     input TEXT,
     expected_output TEXT,
     comment TEXT,
+    args_json JSON,
+    FOREIGN KEY (assignment_id) REFERENCES assignment(id) ON DELETE CASCADE,
+    INDEX idx_assignment_id (assignment_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 選択肢テーブル（課題用、assignment_id を参照）
+CREATE TABLE IF NOT EXISTS choice_option (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    assignment_id INT NOT NULL,
+    option_text TEXT NOT NULL,
+    option_order INT DEFAULT 0,
+    is_correct TINYINT(1) DEFAULT 0,
     FOREIGN KEY (assignment_id) REFERENCES assignment(id) ON DELETE CASCADE,
     INDEX idx_assignment_id (assignment_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -139,6 +155,8 @@ CREATE TABLE IF NOT EXISTS submission (
     user_id INT NOT NULL,
     assignment_id INT NOT NULL,
     code TEXT,
+    answer_text TEXT,
+    selected_choice_id INT,
     is_correct TINYINT(1) DEFAULT NULL,
     feedback TEXT,
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -157,3 +175,8 @@ ALTER TABLE user ADD CONSTRAINT fk_user_class
 -- パスワード: admin (本番環境では必ず変更してください)
 INSERT IGNORE INTO user (username, password_hash, role, is_admin) 
 VALUES ('admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 1);
+
+-- テスト管理者ユーザーを作成
+-- パスワード: testadmin
+INSERT IGNORE INTO user (username, password_hash, role, is_admin) 
+VALUES ('testadmin', '$2y$10$ATLSvlG6CSC5F2JYBKGJAOKo4KofohIk2N4um2FRvMgbwHgf1/3XO', 'admin', 1);

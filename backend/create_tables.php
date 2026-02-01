@@ -6,6 +6,10 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS user (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    name TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    furigana TEXT,
     role TEXT DEFAULT 'student' CHECK (role IN ('student', 'teacher', 'admin')),
     is_admin INTEGER DEFAULT 0,
     class_id INTEGER,
@@ -38,6 +42,20 @@ if (!in_array('class_id', $userColNames)) {
     } catch (Exception $e) {
         // テーブルが存在しない場合は無視
     }
+}
+// マイグレーション：name カラムを追加
+if (!in_array('name', $userColNames)) {
+    $pdo->exec('ALTER TABLE user ADD COLUMN name TEXT');
+}
+// マイグレーション：first_name, last_name, furigana カラムを追加
+if (!in_array('first_name', $userColNames)) {
+    $pdo->exec('ALTER TABLE user ADD COLUMN first_name TEXT');
+}
+if (!in_array('last_name', $userColNames)) {
+    $pdo->exec('ALTER TABLE user ADD COLUMN last_name TEXT');
+}
+if (!in_array('furigana', $userColNames)) {
+    $pdo->exec('ALTER TABLE user ADD COLUMN furigana TEXT');
 };
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS material (

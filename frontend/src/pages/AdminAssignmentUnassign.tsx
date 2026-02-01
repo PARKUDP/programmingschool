@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { apiEndpoints, API_BASE_URL } from "../config/api";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 interface AssignmentTarget {
   id: number;
@@ -25,6 +26,17 @@ const AdminAssignmentUnassign: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    assignmentId: number;
+    targetId: number;
+    targetLabel: string;
+  }>({
+    open: false,
+    assignmentId: 0,
+    targetId: 0,
+    targetLabel: "",
+  });
   const { authFetch, user } = useAuth();
   const isStaff = user?.is_admin || user?.role === "teacher";
 
@@ -48,8 +60,19 @@ const AdminAssignmentUnassign: React.FC = () => {
     }
   };
 
-  const handleRemoveAssignment = async (assignmentId: number, targetId: number) => {
-    if (!window.confirm("この割り当てを解除しますか？")) return;
+  const handleOpenConfirmDialog = (assignmentId: number, targetId: number, targetLabel: string) => {
+    setConfirmDialog({
+      open: true,
+      assignmentId,
+      targetId,
+      targetLabel,
+    });
+  };
+
+  const handleConfirmRemove = async () => {
+    const { assignmentId, targetId } = confirmDialog;
+    setConfirmDialog(prev => ({ ...prev, open: false }));
+    
     try {
       const res = await authFetch(`${API_BASE_URL}/api/assignments/${assignmentId}/targets/${targetId}`, {
         method: "DELETE",
@@ -61,6 +84,10 @@ const AdminAssignmentUnassign: React.FC = () => {
     } catch (err: any) {
       setError((err.message || "割り当て解除に失敗しました"));
     }
+  };
+
+  const handleCancelRemove = () => {
+    setConfirmDialog(prev => ({ ...prev, open: false }));
   };
 
   // 教材ごとにグループ化
@@ -109,6 +136,16 @@ const AdminAssignmentUnassign: React.FC = () => {
 
       {message && <div className="message message-success">{message}</div>}
       {error && <div className="message message-error">{error}</div>}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.open}
+        title="割り当ての解除"
+        message={`「${confirmDialog.targetLabel}」への割り当てを解除してもよろしいですか？`}
+        confirmText="解除する"
+        cancelText="キャンセル"
+        onConfirm={handleConfirmRemove}
+        onCancel={handleCancelRemove}
+      />
 
       {assigned.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
@@ -173,7 +210,7 @@ const AdminAssignmentUnassign: React.FC = () => {
                         {/* 解除ボタン */}
                         <button
                           className="btn btn-danger"
-                          onClick={() => handleRemoveAssignment(item.assignment_id, item.target_id)}
+                          onClick={() => handleOpenConfirmDialog(item.assignment_id, item.target_id, item.target_label)}
                           style={{ marginTop: "auto", width: "100%", fontSize: "0.85rem" }}
                         >
                           この割り当てを解除

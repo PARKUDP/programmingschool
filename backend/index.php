@@ -1,4 +1,40 @@
 <?php
+// エラーハンドリングの設定
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+ob_start(); // 出力バッファーを開始
+
+// エラーハンドラーを設定して、JSONエラーを返す
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    // 出力バッファーをクリア
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    error_log("[$errfile:$errline] $errstr");
+    // JSONレスポンスが開始している場合はスキップ
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+        http_response_code(500);
+        echo json_encode(['error' => 'Internal Server Error', 'detail' => $errstr]);
+    }
+    exit;
+});
+
+set_exception_handler(function($exception) {
+    // 出力バッファーをクリア
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    error_log($exception->__toString());
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+        http_response_code(500);
+        echo json_encode(['error' => 'Internal Server Error', 'detail' => $exception->getMessage()]);
+    }
+    exit;
+});
+
 require_once __DIR__ . '/db.php';
 $pdo = getPDO();
 
@@ -160,7 +196,12 @@ if (!in_array($path, $public_paths)) {
 }
 
 function json_response($data, $status = 200) {
+    // 出力バッファーをクリア
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
     http_response_code($status);
+    header('Content-Type: application/json');
     echo json_encode($data);
     exit();
 }
@@ -196,6 +237,9 @@ if ($path === '/api/register' && $method === 'POST') {
         $role = !empty($data['is_admin']) ? 'admin' : 'student';
     }
     $is_admin = ($role === 'admin') ? 1 : 0;
+    $last_name = $data['last_name'] ?? null;
+    $first_name = $data['first_name'] ?? null;
+    $furigana = $data['furigana'] ?? null;
     
     $stmt = $pdo->prepare('SELECT id FROM user WHERE username = ?');
     $stmt->execute([$data['username']]);
@@ -203,8 +247,8 @@ if ($path === '/api/register' && $method === 'POST') {
         json_response(['error' => 'username exists'], 409);
     }
     $hash = password_hash($data['password'], PASSWORD_DEFAULT);
-    $stmt = $pdo->prepare('INSERT INTO user (username, password_hash, is_admin, role) VALUES (?,?,?,?)');
-    $stmt->execute([$data['username'], $hash, $is_admin, $role]);
+    $stmt = $pdo->prepare('INSERT INTO user (username, password_hash, last_name, first_name, furigana, is_admin, role) VALUES (?,?,?,?,?,?,?)');
+    $stmt->execute([$data['username'], $hash, $last_name, $first_name, $furigana, $is_admin, $role]);
     json_response(['message' => 'User created', 'user_id' => $pdo->lastInsertId(), 'role' => $role], 201);
 }
 
@@ -369,7 +413,11 @@ if ($path === '/api/users' && $method === 'GET') {
     $stmt = $pdo->query('
         SELECT 
             u.id, 
-            u.username, 
+            u.username,
+            u.name,
+            u.last_name,
+            u.first_name,
+            u.furigana,
             u.is_admin,
             u.role,
             u.class_id,
@@ -379,6 +427,85 @@ if ($path === '/api/users' && $method === 'GET') {
         ORDER BY u.id ASC
     ');
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+// ユーザー情報の編集（管理者・先生）
+if (preg_match('#^/api/users/(\d+)$#', $path, $m) && $method === 'PUT') {
+    require_teacher();
+    $uid = (int)$m[1];
+    $data = json_decode(file_get_contents('php://input'), true);
+    
+    // 更新対象のユーザーが存在するか確認
+    $stmt = $pdo->prepare('SELECT id FROM user WHERE id = ?');
+    $stmt->execute([$uid]);
+    if (!$stmt->fetch()) {
+        json_response(['error' => 'User not found'], 404);
+    }
+    
+    // 更新フィールド（ロールとパスワードは管理者のみ）
+    $updates = [];
+    $params = [];
+    
+    if (isset($data['last_name'])) {
+        $updates[] = 'last_name = ?';
+        $params[] = $data['last_name'];
+    }
+    if (isset($data['first_name'])) {
+        $updates[] = 'first_name = ?';
+        $params[] = $data['first_name'];
+    }
+    if (isset($data['furigana'])) {
+        $updates[] = 'furigana = ?';
+        $params[] = $data['furigana'];
+    }
+    
+    // 表示名（name）は自動的に「姓 名」で生成
+    $has_name_change = isset($data['last_name']) || isset($data['first_name']);
+    if ($has_name_change) {
+        // 現在のlast_name/first_nameを取得（未指定の場合）
+        if (!isset($data['last_name']) || !isset($data['first_name'])) {
+            $stmt = $pdo->prepare('SELECT last_name, first_name FROM user WHERE id = ?');
+            $stmt->execute([$uid]);
+            $current = $stmt->fetch(PDO::FETCH_ASSOC);
+            $last_name = $data['last_name'] ?? $current['last_name'];
+            $first_name = $data['first_name'] ?? $current['first_name'];
+        } else {
+            $last_name = $data['last_name'];
+            $first_name = $data['first_name'];
+        }
+        // 表示名を自動生成（姓と名の間にスペース、両方がない場合は空）
+        $auto_name = trim($last_name . ' ' . $first_name);
+        $updates[] = 'name = ?';
+        $params[] = $auto_name;
+    }
+    
+    // ロール変更（管理者のみ）
+    if (isset($data['role']) && ($current_user['is_admin'] || $current_user['role'] === 'admin')) {
+        if (!in_array($data['role'], ['student', 'teacher', 'admin'])) {
+            json_response(['error' => 'Invalid role'], 400);
+        }
+        $updates[] = 'role = ?';
+        $params[] = $data['role'];
+    }
+    
+    // パスワード変更（管理者のみ）
+    if (isset($data['password']) && ($current_user['is_admin'] || $current_user['role'] === 'admin')) {
+        if (strlen($data['password']) < 6) {
+            json_response(['error' => 'Password must be at least 6 characters'], 400);
+        }
+        $updates[] = 'password_hash = ?';
+
+        $params[] = password_hash($data['password'], PASSWORD_BCRYPT);
+    }
+    
+    if (empty($updates)) {
+        json_response(['error' => 'No fields to update'], 400);
+    }
+    
+    $params[] = $uid;
+    $stmt = $pdo->prepare('UPDATE user SET ' . implode(', ', $updates) . ' WHERE id = ?');
+    $stmt->execute($params);
+    json_response(['message' => 'User updated']);
 }
 
 // 管理者・先生によるユーザー削除（退会想定）
@@ -404,7 +531,7 @@ if ($path === '/api/classes' && $method === 'GET') {
 // クラス未所属ユーザー一覧（管理者）
 if ($path === '/api/classes/unassigned' && $method === 'GET') {
     require_teacher();
-    $stmt = $pdo->query('SELECT id, username, is_admin FROM user WHERE class_id IS NULL ORDER BY id ASC');
+    $stmt = $pdo->query('SELECT id, username, name, last_name, first_name, furigana, is_admin FROM user WHERE class_id IS NULL ORDER BY id ASC');
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
 
@@ -469,7 +596,7 @@ if (preg_match('#^/api/classes/(\d+)$#', $path, $m) && $method === 'DELETE') {
 if (preg_match('#^/api/classes/(\d+)/users$#', $path, $m) && $method === 'GET') {
     require_teacher();
     $class_id = (int)$m[1];
-    $stmt = $pdo->prepare('SELECT id, username, role FROM user WHERE class_id = ? AND role = "student" ORDER BY id');
+    $stmt = $pdo->prepare('SELECT id, username, name, last_name, first_name, furigana, role FROM user WHERE class_id = ? AND role = "student" ORDER BY id');
     $stmt->execute([$class_id]);
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
@@ -616,7 +743,7 @@ if (preg_match('#^/api/classes/(\\d+)/progress$#', $path, $m) && $method === 'GE
         LIMIT 30
     ");
     $dailyStmt->execute($memberIds);
-    $dailyCounts = $dailyStmt->fetchAll(PDO::FETCH_ASSOC);
+    $dailyCounts = array_reverse($dailyStmt->fetchAll(PDO::FETCH_ASSOC));
     
     // 教材別進捗
     $materialStmt = $pdo->prepare("
@@ -753,15 +880,7 @@ if (preg_match('#^/api/problems/(\d+)$#', $path, $m) && $method === 'DELETE') {
 }
 
 if ($path === '/api/assignments' && $method === 'GET') {
-        $sql = 'SELECT a.id, a.lesson_id, a.title, a.description, a.question_text, a.input_example, a.expected_output, a.file_path,
-                                     CASE
-                                         WHEN EXISTS (SELECT 1 FROM choice_option co WHERE co.assignment_id = a.id) THEN "choice"
-                                         WHEN a.problem_type IS NOT NULL THEN a.problem_type
-                                         ELSE "code"
-                                     END as problem_type,
-                                     a.exec_mode,
-                                     a.entry_function,
-                                     a.created_at
+        $sql = 'SELECT a.id, a.lesson_id, a.title, a.description, a.question_text, a.input_example, a.expected_output, a.file_path, a.problem_type, a.created_at
                         FROM assignment a';
         $stmt = $pdo->query($sql);
         json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
@@ -775,15 +894,7 @@ if ($path === '/api/assignments/available' && $method === 'GET') {
     if ($role !== 'student') {
         json_response([]);
     }
-        $sql = 'SELECT a.id, a.lesson_id, a.title, a.description, a.question_text, a.input_example, a.expected_output, a.file_path,
-                                                                         CASE
-                                                                             WHEN EXISTS (SELECT 1 FROM choice_option co WHERE co.assignment_id = a.id) THEN "choice"
-                                                                             WHEN a.problem_type IS NOT NULL THEN a.problem_type
-                                                                             ELSE "code"
-                                                                         END as problem_type,
-                                     a.exec_mode,
-                                     a.entry_function,
-                                     a.created_at
+        $sql = 'SELECT a.id, a.lesson_id, a.title, a.description, a.question_text, a.input_example, a.expected_output, a.file_path, a.problem_type, a.created_at
             FROM assignment a
             WHERE 
               EXISTS (SELECT 1 FROM assignment_target t WHERE t.assignment_id=a.id AND t.target_type="all")
@@ -807,17 +918,7 @@ if ($path === '/api/assignments' && $method === 'POST') {
     $question_text = $_POST['question_text'] ?? null;
     $input_example = $_POST['input_example'] ?? null;
     $expected_output = $_POST['expected_output'] ?? null;
-    $problem_type = $_POST['problem_type'] ?? null;
-    $exec_mode = $_POST['exec_mode'] ?? 'stdin';
-    $entry_function = $_POST['entry_function'] ?? null;
-    $choices_raw = $_POST['choices'] ?? '[]';
-    $choices = json_decode($choices_raw, true);
-    if (!is_array($choices)) $choices = [];
-    $correct_answer_index = isset($_POST['correct_answer_index']) ? (int)$_POST['correct_answer_index'] : 0;
-
-    if (!$problem_type || !in_array($problem_type, ['code', 'choice', 'essay'], true)) {
-        $problem_type = count($choices) > 0 ? 'choice' : 'code';
-    }
+    $problem_type = $_POST['problem_type'] ?? 'code';
 
     $file_path = null;
     if (!empty($_FILES['file']['tmp_name'])) {
@@ -830,57 +931,62 @@ if ($path === '/api/assignments' && $method === 'POST') {
         }
     }
 
-    if ($exec_mode !== 'stdin' && $exec_mode !== 'function') {
-        $exec_mode = 'stdin';
-    }
-
-    $stmt = $pdo->prepare('INSERT INTO assignment (lesson_id, title, description, question_text, input_example, expected_output, file_path, problem_type, exec_mode, entry_function, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,NOW())');
-    $stmt->execute([$lesson_id, $title, $description, $question_text, $input_example, $expected_output, $file_path, $problem_type, $exec_mode, $entry_function]);
+    $stmt = $pdo->prepare('INSERT INTO assignment (lesson_id, title, description, question_text, input_example, expected_output, file_path, problem_type, created_at) VALUES (?,?,?,?,?,?,?,?,NOW())');
+    $stmt->execute([$lesson_id, $title, $description, $question_text, $input_example, $expected_output, $file_path, $problem_type]);
     $aid = $pdo->lastInsertId();
 
-    // 選択式の選択肢を保存
-    if ($problem_type === 'choice' && count($choices) > 0) {
-        $ins = $pdo->prepare('INSERT INTO choice_option (assignment_id, option_text, option_order, is_correct) VALUES (?,?,?,?)');
-        foreach ($choices as $idx => $text) {
-            $label = is_string($text) ? trim($text) : '';
-            if ($label === '') continue;
-            $is_correct = ($idx === $correct_answer_index) ? 1 : 0;
-            $ins->execute([$aid, $label, $idx, $is_correct]);
-        }
-    }
-
-    // コード実行型で期待される出力があればデフォルトのテストケースを1件作成
-    if ($problem_type === 'code' && !empty(trim((string)$expected_output))) {
+    // 期待される出力があればデフォルトのテストケースを1件作成
+    if (!empty(trim((string)$expected_output))) {
         $insTc = $pdo->prepare('INSERT INTO test_case (assignment_id, input, expected_output, comment) VALUES (?,?,?,?)');
         $insTc->execute([$aid, $input_example ?? '', $expected_output, null]);
     }
 
-    // 配布対象の登録: target_type = all|users|classes, target_ids = JSON array (strings or numbers)
-    $target_type = $_POST['target_type'] ?? 'all';
-    $target_ids_raw = $_POST['target_ids'] ?? '[]';
-    $target_ids = json_decode($target_ids_raw, true);
-    if (!is_array($target_ids)) $target_ids = [];
-
-    // 管理者・先生は配布対象に含めない（個別指定された場合は無視）
-    if ($target_type === 'users' && count($target_ids) > 0) {
-        $placeholders = implode(',', array_fill(0, count($target_ids), '?'));
-        $stmt = $pdo->prepare("SELECT id FROM user WHERE id IN ($placeholders) AND (role = 'student' OR (role IS NULL AND is_admin = 0))");
-        $stmt->execute(array_map('intval', $target_ids));
-        $target_ids = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
+    // 選択肢の処理（choice 問題型の場合）
+    if ($problem_type === 'choice') {
+        $choices_json = $_POST['choices'] ?? null;
+        if ($choices_json) {
+            $choices = json_decode($choices_json, true);
+            if (is_array($choices) && count($choices) > 0) {
+                $correct_idx = (int)($_POST['correct_answer_index'] ?? 0);
+                $ins_choice = $pdo->prepare('INSERT INTO choice_option (assignment_id, option_text, option_order, is_correct) VALUES (?,?,?,?)');
+                foreach ($choices as $idx => $choice_text) {
+                    $is_correct = ($idx === $correct_idx) ? 1 : 0;
+                    $ins_choice->execute([$aid, $choice_text, $idx, $is_correct]);
+                }
+            }
+        }
     }
 
-    if ($target_type === 'all') {
-        $pdo->prepare('INSERT INTO assignment_target (assignment_id, target_type, target_id) VALUES (?,?,NULL)')
-            ->execute([$aid, 'all']);
-    } elseif ($target_type === 'users') {
-        $ins = $pdo->prepare('INSERT INTO assignment_target (assignment_id, target_type, target_id) VALUES (?,?,?)');
-        foreach ($target_ids as $uid) {
-            $ins->execute([$aid, 'user', (int)$uid]);
+    // 配布対象の登録: target_type = all|users|classes, target_ids = JSON array (strings or numbers)
+    // target_type が送信されていない場合は割り当てなしとする
+    $target_type = isset($_POST['target_type']) ? $_POST['target_type'] : null;
+    
+    if ($target_type !== null) {
+        $target_ids_raw = $_POST['target_ids'] ?? '[]';
+        $target_ids = json_decode($target_ids_raw, true);
+        if (!is_array($target_ids)) $target_ids = [];
+
+        // 管理者・先生は配布対象に含めない（個別指定された場合は無視）
+        if ($target_type === 'users' && count($target_ids) > 0) {
+            $placeholders = implode(',', array_fill(0, count($target_ids), '?'));
+            $stmt = $pdo->prepare("SELECT id FROM user WHERE id IN ($placeholders) AND (role = 'student' OR (role IS NULL AND is_admin = 0))");
+            $stmt->execute(array_map('intval', $target_ids));
+            $target_ids = $stmt->fetchAll(PDO::FETCH_COLUMN, 0);
         }
-    } elseif ($target_type === 'classes') {
-        $ins = $pdo->prepare('INSERT INTO assignment_target (assignment_id, target_type, target_id) VALUES (?,?,?)');
-        foreach ($target_ids as $cid) {
-            $ins->execute([$aid, 'class', (int)$cid]);
+
+        if ($target_type === 'all') {
+            $pdo->prepare('INSERT INTO assignment_target (assignment_id, target_type, target_id) VALUES (?,?,NULL)')
+                ->execute([$aid, 'all']);
+        } elseif ($target_type === 'users') {
+            $ins = $pdo->prepare('INSERT INTO assignment_target (assignment_id, target_type, target_id) VALUES (?,?,?)');
+            foreach ($target_ids as $uid) {
+                $ins->execute([$aid, 'user', (int)$uid]);
+            }
+        } elseif ($target_type === 'classes') {
+            $ins = $pdo->prepare('INSERT INTO assignment_target (assignment_id, target_type, target_id) VALUES (?,?,?)');
+            foreach ($target_ids as $cid) {
+                $ins->execute([$aid, 'class', (int)$cid]);
+            }
         }
     }
 
@@ -889,15 +995,7 @@ if ($path === '/api/assignments' && $method === 'POST') {
 }
 
 if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'GET') {
-        $sql = 'SELECT a.id, a.lesson_id, a.title, a.description, a.question_text, a.input_example, a.expected_output, a.file_path,
-                                     CASE
-                                         WHEN EXISTS (SELECT 1 FROM choice_option co WHERE co.assignment_id = a.id) THEN "choice"
-                                         WHEN a.problem_type IS NOT NULL THEN a.problem_type
-                                         ELSE "code"
-                                     END as problem_type,
-                                     a.exec_mode,
-                                     a.entry_function,
-                                     a.created_at
+        $sql = 'SELECT a.id, a.lesson_id, a.title, a.description, a.question_text, a.input_example, a.expected_output, a.file_path, a.problem_type, a.created_at
                         FROM assignment a
                         WHERE a.id = ?';
         $stmt = $pdo->prepare($sql);
@@ -918,16 +1016,10 @@ if (preg_match('#^/api/assignments/(\d+)/choices$#', $path, $m) && $method === '
 if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'PUT') {
     require_teacher();
     $id = $m[1];
-    $currentStmt = $pdo->prepare('SELECT problem_type, input_example, expected_output, exec_mode, entry_function FROM assignment WHERE id = ?');
-    $currentStmt->execute([$id]);
-    $current = $currentStmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $data = json_decode(file_get_contents('php://input'), true);
     if (!$data) json_response(['error' => 'invalid json'], 400);
-    $exec_mode = $data['exec_mode'] ?? null;
-    if ($exec_mode && !in_array($exec_mode, ['stdin','function'], true)) {
-        $exec_mode = null;
-    }
-    $stmt = $pdo->prepare('UPDATE assignment SET title = COALESCE(?, title), description = COALESCE(?, description), question_text = COALESCE(?, question_text), input_example = COALESCE(?, input_example), expected_output = COALESCE(?, expected_output), problem_type = COALESCE(?, problem_type), exec_mode = COALESCE(?, exec_mode), entry_function = COALESCE(?, entry_function) WHERE id = ?');
+    
+    $stmt = $pdo->prepare('UPDATE assignment SET title = COALESCE(?, title), description = COALESCE(?, description), question_text = COALESCE(?, question_text), input_example = COALESCE(?, input_example), expected_output = COALESCE(?, expected_output), problem_type = COALESCE(?, problem_type) WHERE id = ?');
     $stmt->execute([
         $data['title'] ?? null,
         $data['description'] ?? null,
@@ -935,44 +1027,38 @@ if (preg_match('#^/api/assignments/(\d+)$#', $path, $m) && $method === 'PUT') {
         $data['input_example'] ?? null,
         $data['expected_output'] ?? null,
         $data['problem_type'] ?? null,
-        $exec_mode,
-        $data['entry_function'] ?? null,
         $id
     ]);
 
-    $effectiveProblemType = $data['problem_type'] ?? ($current['problem_type'] ?? null);
-    if (!$effectiveProblemType) {
-        $choiceCountStmt = $pdo->prepare('SELECT COUNT(*) as cnt FROM choice_option WHERE assignment_id = ?');
-        $choiceCountStmt->execute([$id]);
-        $cntRow = $choiceCountStmt->fetch(PDO::FETCH_ASSOC);
-        $choiceCount = (int)($cntRow['cnt'] ?? 0);
-        $effectiveProblemType = $choiceCount > 0 ? 'choice' : 'code';
-        $pdo->prepare('UPDATE assignment SET problem_type = ? WHERE id = ?')->execute([$effectiveProblemType, $id]);
-    }
-    $effectiveInput = $data['input_example'] ?? ($current['input_example'] ?? '');
-    $effectiveExpected = $data['expected_output'] ?? ($current['expected_output'] ?? '');
+    $effectiveInput = $data['input_example'] ?? '';
+    $effectiveExpected = $data['expected_output'] ?? '';
 
-    // 選択肢の更新
-    if (isset($data['choices']) && is_array($data['choices'])) {
-        $pdo->prepare('DELETE FROM choice_option WHERE assignment_id = ?')->execute([$id]);
-        $choices = $data['choices'];
-        $correct_index = isset($data['correct_answer_index']) ? (int)$data['correct_answer_index'] : 0;
-        $ins = $pdo->prepare('INSERT INTO choice_option (assignment_id, option_text, option_order, is_correct) VALUES (?,?,?,?)');
-        foreach ($choices as $idx => $text) {
-            $label = is_string($text) ? trim($text) : '';
-            if ($label === '') continue;
-            $ins->execute([$id, $label, $idx, $idx === $correct_index ? 1 : 0]);
-        }
-    }
-
-    // 問題タイプに応じてテストケースを管理
-    if ($effectiveProblemType === 'code' && !empty(trim((string)$effectiveExpected))) {
+    // テストケースの更新
+    if (!empty(trim((string)$effectiveExpected))) {
         $pdo->prepare('DELETE FROM test_case WHERE assignment_id = ?')->execute([$id]);
         $insTc = $pdo->prepare('INSERT INTO test_case (assignment_id, input, expected_output, comment) VALUES (?,?,?,?)');
         $insTc->execute([$id, $effectiveInput, $effectiveExpected, null]);
     } else {
-        // 非コード型ならテストケースをクリア
+        // テストケースをクリア
         $pdo->prepare('DELETE FROM test_case WHERE assignment_id = ?')->execute([$id]);
+    }
+
+    // 選択肢の更新（choice 問題型の場合）
+    $problem_type = $data['problem_type'] ?? null;
+    if ($problem_type === 'choice') {
+        $choices = $data['choices'] ?? null;
+        if (is_array($choices) && count($choices) > 0) {
+            $pdo->prepare('DELETE FROM choice_option WHERE assignment_id = ?')->execute([$id]);
+            $correct_idx = (int)($data['correct_answer_index'] ?? 0);
+            $ins_choice = $pdo->prepare('INSERT INTO choice_option (assignment_id, option_text, option_order, is_correct) VALUES (?,?,?,?)');
+            foreach ($choices as $idx => $choice_text) {
+                $is_correct = ($idx === $correct_idx) ? 1 : 0;
+                $ins_choice->execute([$id, $choice_text, $idx, $is_correct]);
+            }
+        }
+    } else {
+        // choice 以外の問題型に変更された場合は選択肢を削除
+        $pdo->prepare('DELETE FROM choice_option WHERE assignment_id = ?')->execute([$id]);
     }
 
     clear_progress_cache_all();
@@ -994,6 +1080,8 @@ if (preg_match('#^/api/assignments/(\d+)/targets$#', $path, $m) && $method === '
     $data = json_decode(file_get_contents('php://input'), true);
     if (!$data) json_response(['error' => 'invalid json'], 400);
     
+    error_log("PUT /api/assignments/$aid/targets - data: " . json_encode($data));
+    
     $target_type = $data['target_type'] ?? 'all';
     $target_ids = $data['target_ids'] ?? [];
     if (!is_array($target_ids)) $target_ids = [];
@@ -1007,25 +1095,34 @@ if (preg_match('#^/api/assignments/(\d+)/targets$#', $path, $m) && $method === '
     }
     
     // 既存の割り当てを削除
-    $pdo->prepare('DELETE FROM assignment_target WHERE assignment_id = ?')->execute([$aid]);
+    error_log("Deleting existing targets for assignment $aid");
+    $delResult = $pdo->prepare('DELETE FROM assignment_target WHERE assignment_id = ?')->execute([$aid]);
+    error_log("Delete result: " . ($delResult ? 'success' : 'failed'));
     
-    // 新しい割り当てを追加
+    // 新しい割り当てを追加（target_type = 'none' の場合は何も追加しない）
     if ($target_type === 'all') {
+        error_log("Inserting 'all' target for assignment $aid");
         $pdo->prepare('INSERT INTO assignment_target (assignment_id, target_type, target_id) VALUES (?,?,NULL)')
             ->execute([$aid, 'all']);
-    } elseif ($target_type === 'users') {
+    } elseif ($target_type === 'users' && count($target_ids) > 0) {
+        error_log("Inserting user targets for assignment $aid: " . json_encode($target_ids));
         $ins = $pdo->prepare('INSERT INTO assignment_target (assignment_id, target_type, target_id) VALUES (?,?,?)');
         foreach ($target_ids as $uid) {
             $ins->execute([$aid, 'user', (int)$uid]);
         }
-    } elseif ($target_type === 'classes') {
+    } elseif ($target_type === 'classes' && count($target_ids) > 0) {
+        error_log("Inserting class targets for assignment $aid: " . json_encode($target_ids));
         $ins = $pdo->prepare('INSERT INTO assignment_target (assignment_id, target_type, target_id) VALUES (?,?,?)');
         foreach ($target_ids as $cid) {
             $ins->execute([$aid, 'class', (int)$cid]);
         }
+    } else {
+        error_log("No targets inserted (target_type=$target_type, count=" . count($target_ids) . ")");
     }
+    // target_type === 'none' の場合は何も挿入しない
     
     clear_progress_cache_all();
+    error_log("Targets update completed for assignment $aid");
     json_response(['message' => 'Assignment targets updated']);
 }
 
@@ -1033,7 +1130,15 @@ if (preg_match('#^/api/assignments/(\d+)/targets$#', $path, $m) && $method === '
 if (preg_match('#^/api/assignments/(\d+)/targets$#', $path, $m) && $method === 'GET') {
     require_teacher();
     $aid = (int)$m[1];
-    $stmt = $pdo->prepare('SELECT target_type, target_id FROM assignment_target WHERE assignment_id = ?');
+    $stmt = $pdo->prepare('SELECT 
+        t.target_type, t.target_id,
+        CASE WHEN t.target_type="all" THEN "全体" 
+             WHEN t.target_type="user" THEN CONCAT(IFNULL(u.last_name, ""), " ", IFNULL(u.first_name, "")) 
+             WHEN t.target_type="class" THEN c.name END as target_name
+    FROM assignment_target t
+    LEFT JOIN user u ON t.target_type="user" AND t.target_id = u.id
+    LEFT JOIN class c ON t.target_type="class" AND t.target_id = c.id
+    WHERE t.assignment_id = ?');
     $stmt->execute([$aid]);
     $targets = $stmt->fetchAll(PDO::FETCH_ASSOC);
     json_response(['targets' => $targets]);
@@ -1060,7 +1165,7 @@ if ($path === '/api/assignments/assigned' && $method === 'GET') {
         CASE WHEN t.target_type="all" THEN "全体" 
              WHEN t.target_type="user" THEN "ユーザー" 
              WHEN t.target_type="class" THEN "クラス" END as target_label,
-        CASE WHEN t.target_type="user" THEN u.username 
+        CASE WHEN t.target_type="user" THEN CONCAT(IFNULL(u.last_name, ""), " ", IFNULL(u.first_name, "")) 
              WHEN t.target_type="class" THEN c.name END as target_name
     FROM assignment a
     LEFT JOIN lesson l ON a.lesson_id = l.id
@@ -1165,8 +1270,8 @@ if ($path === '/api/submit' && $method === 'POST') {
         }
         $is_correct = ((int)$choice['is_correct'] === 1) ? 1 : 0;
         $feedback = $is_correct ? '正解です。' : '不正解です。';
-        $ins = $pdo->prepare('INSERT INTO submission (user_id, assignment_id, problem_type, selected_choice_id, is_correct, feedback, submitted_at) VALUES (?,?,?,?,?,?,NOW())');
-        $ins->execute([$user_id, $assignment_id, $problem_type, $selected_choice_id, $is_correct, $feedback]);
+        $ins = $pdo->prepare('INSERT INTO submission (user_id, assignment_id, selected_choice_id, is_correct, feedback, submitted_at) VALUES (?,?,?,?,?,NOW())');
+        $ins->execute([$user_id, $assignment_id, $selected_choice_id, $is_correct, $feedback]);
         clear_progress_cache_all();
         json_response(['message' => 'Submission processed', 'is_correct' => $is_correct, 'feedback' => $feedback]);
     }
@@ -1177,8 +1282,8 @@ if ($path === '/api/submit' && $method === 'POST') {
             json_response(['error' => 'answer_text required'], 400);
         }
         $answer_text = trim($data['answer_text']);
-        $ins = $pdo->prepare('INSERT INTO submission (user_id, assignment_id, problem_type, answer_text, is_correct, feedback, submitted_at) VALUES (?,?,?,?,NULL,NULL,NOW())');
-        $ins->execute([$user_id, $assignment_id, $problem_type, $answer_text]);
+        $ins = $pdo->prepare('INSERT INTO submission (user_id, assignment_id, answer_text, is_correct, feedback, submitted_at) VALUES (?,?,?,NULL,NULL,NOW())');
+        $ins->execute([$user_id, $assignment_id, $answer_text]);
         clear_progress_cache_all();
         json_response(['message' => 'Essay submitted', 'is_correct' => null]);
     }
@@ -1636,7 +1741,7 @@ if (preg_match('#^/api/submissions/(\d+)$#', $path, $m) && $method === 'GET') {
     if ($current_user['id'] != $user_id && empty($current_user['is_admin'])) {
         json_response(['error' => 'forbidden'], 403);
     }
-    $stmt = $pdo->prepare('SELECT id, assignment_id, problem_type, is_correct, feedback, code, answer_text, selected_choice_id, submitted_at FROM submission WHERE user_id = ? ORDER BY submitted_at DESC');
+    $stmt = $pdo->prepare('SELECT id, assignment_id, is_correct, feedback, code, submitted_at FROM submission WHERE user_id = ? ORDER BY submitted_at DESC');
     $stmt->execute([$user_id]);
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
 }
@@ -1648,30 +1753,22 @@ if ($path === '/api/submissions/review' && $method === 'GET') {
         json_response(['error' => 'forbidden'], 403);
     }
 
-    $problem_type = $_GET['problem_type'] ?? null;
     $assignment_id = $_GET['assignment_id'] ?? null;
     $where = [];
     $params = [];
-    if ($problem_type) {
-        $where[] = 's.problem_type = ?';
-        $params[] = $problem_type;
-    }
     if ($assignment_id) {
         $where[] = 's.assignment_id = ?';
         $params[] = (int)$assignment_id;
     }
     $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
-    $sql = "SELECT s.id, s.user_id, s.assignment_id, s.problem_type, s.is_correct, s.feedback, s.code, s.answer_text, s.selected_choice_id, s.submitted_at,
+    $sql = "SELECT s.id, s.user_id, s.assignment_id, s.is_correct, s.feedback, s.code, s.submitted_at,
                    u.username,
                    a.title AS assignment_title,
-                   a.question_text,
-                   a.problem_type AS assignment_problem_type,
-                   co.option_text AS selected_choice_text
+                   a.question_text
             FROM submission s
             INNER JOIN user u ON s.user_id = u.id
             INNER JOIN assignment a ON s.assignment_id = a.id
-            LEFT JOIN choice_option co ON co.id = s.selected_choice_id
             $whereSql
             ORDER BY s.submitted_at DESC";
     $stmt = $pdo->prepare($sql);
@@ -1684,7 +1781,7 @@ if ($path === '/api/submissions' && $method === 'GET') {
     global $current_user;
     $assignment_id = $_GET['assignment_id'] ?? null;
     if ($assignment_id) {
-        $stmt = $pdo->prepare('SELECT id, assignment_id, problem_type, is_correct, feedback, code, answer_text, selected_choice_id, submitted_at FROM submission WHERE assignment_id = ? AND user_id = ? ORDER BY submitted_at DESC');
+        $stmt = $pdo->prepare('SELECT id, assignment_id, is_correct, feedback, code, submitted_at FROM submission WHERE assignment_id = ? AND user_id = ? ORDER BY submitted_at DESC');
         $stmt->execute([(int)$assignment_id, $current_user['id']]);
         json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
@@ -1697,18 +1794,19 @@ if ($path === '/api/submissions/essay' && $method === 'GET') {
         json_response(['error' => 'forbidden'], 403);
     }
     $assignment_id = $_GET['assignment_id'] ?? null;
-    $where = ['s.problem_type = "essay"'];
+    $where = [];
     $params = [];
     if ($assignment_id) {
         $where[] = 's.assignment_id = ?';
         $params[] = (int)$assignment_id;
     }
-    $whereSql = 'WHERE ' . implode(' AND ', $where);
-    $sql = "SELECT s.id, s.user_id, s.assignment_id, s.answer_text, s.is_correct, s.feedback, s.submitted_at,
+    $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+    $sql = "SELECT s.id, s.user_id, s.assignment_id, s.is_correct, s.feedback, s.submitted_at,
                    u.username, a.title as assignment_title
-            FROM submission s
+            FROM essay_submission s
             INNER JOIN user u ON s.user_id = u.id
-            INNER JOIN assignment a ON s.assignment_id = a.id
+            INNER JOIN problem p ON s.problem_id = p.id
+            INNER JOIN lesson l ON p.lesson_id = l.id
             $whereSql
             ORDER BY s.submitted_at DESC";
     $stmt = $pdo->prepare($sql);
@@ -1845,10 +1943,10 @@ if ($path === '/api/progress' && $method === 'GET') {
     $unsubmitted = $totalAssignments - $attempted;
 
     if ($user_id) {
-        $dailyStmt = $pdo->prepare('SELECT substr(submitted_at,1,10) as date, COUNT(*) as count, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct, SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END) as incorrect, SUM(CASE WHEN is_correct IS NULL THEN 1 ELSE 0 END) as pending FROM submission WHERE user_id = ? GROUP BY substr(submitted_at,1,10) ORDER BY date DESC LIMIT 30');
+        $dailyStmt = $pdo->prepare('SELECT substr(submitted_at,1,10) as date, COUNT(*) as count, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct, SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END) as incorrect, SUM(CASE WHEN is_correct IS NULL THEN 1 ELSE 0 END) as pending FROM submission WHERE user_id = ? GROUP BY substr(submitted_at,1,10) ORDER BY date ASC LIMIT 30');
         $dailyStmt->execute([$user_id]);
     } else {
-        $dailyStmt = $pdo->query('SELECT substr(submitted_at,1,10) as date, COUNT(*) as count, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct, SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END) as incorrect, SUM(CASE WHEN is_correct IS NULL THEN 1 ELSE 0 END) as pending FROM submission GROUP BY substr(submitted_at,1,10) ORDER BY date DESC LIMIT 30');
+        $dailyStmt = $pdo->query('SELECT substr(submitted_at,1,10) as date, COUNT(*) as count, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct, SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END) as incorrect, SUM(CASE WHEN is_correct IS NULL THEN 1 ELSE 0 END) as pending FROM submission GROUP BY substr(submitted_at,1,10) ORDER BY date ASC LIMIT 30');
     }
     $daily = $dailyStmt->fetchAll(PDO::FETCH_ASSOC);
 

@@ -237,7 +237,7 @@ const ProblemSolve: React.FC = () => {
   }
 
   return (
-    <div className="page-container">
+    <div className="page-container" style={{ backgroundColor: "#ffffff" }}>
       <PageHeader
         title={assignment.title}
         subtitle={assignment.description || ""}
@@ -352,10 +352,10 @@ const ProblemSolve: React.FC = () => {
                             {c.passed ? "PASS" : "FAIL"}
                           </span>
                         </div>
-                        <div style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                        <div style={{ fontSize: "0.9rem", color: "#1f2937" }}>
                           <div style={{ marginBottom: "0.25rem" }}><strong>入力:</strong> {c.input || "(なし)"}</div>
                           <div style={{ marginBottom: "0.25rem" }}><strong>期待出力:</strong><pre style={{ whiteSpace: "pre-wrap", margin: 0, color: "#0f172a" }}>{c.expected_output}</pre></div>
-                          <div style={{ marginBottom: "0.25rem" }}><strong>あなたの出力:</strong><pre style={{ whiteSpace: "pre-wrap", margin: 0, color: c.passed ? "#0f172a" : "#b91c1c" }}>{c.output}</pre></div>
+                          <div style={{ marginBottom: "0.25rem", backgroundColor: c.passed ? "transparent" : "#fee2e2", padding: c.passed ? 0 : "0.5rem", borderRadius: c.passed ? 0 : "0.25rem" }}><strong>あなたの出力:</strong><pre style={{ whiteSpace: "pre-wrap", margin: 0, color: c.passed ? "#0f172a" : "#991b1b" }}>{c.output}</pre></div>
                           {!c.passed && c.output.includes("TypeError: unsupported operand type(s)") && c.output.includes("function") && (
                             <div style={{ 
                               marginTop: "0.5rem", 
