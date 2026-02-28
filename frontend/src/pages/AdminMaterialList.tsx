@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { apiEndpoints } from "../config/api";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const AdminMaterialList: React.FC = () => {
   const [materials, setMaterials] = useState([]);
@@ -11,6 +12,7 @@ const AdminMaterialList: React.FC = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [editModal, setEditModal] = useState<{ isOpen: boolean; id: number | null; title: string; description: string }>({ isOpen: false, id: null, title: "", description: "" });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: number | null }>({ isOpen: false, id: null });
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
   const isStaff = user?.is_admin || user?.role === "teacher";
@@ -78,9 +80,13 @@ const AdminMaterialList: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("本当に削除しますか？")) return;
+    setDeleteConfirm({ isOpen: true, id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.id) return;
     try {
-      const res = await authFetch(`${apiEndpoints.materials}/${id}`, {
+      const res = await authFetch(`${apiEndpoints.materials}/${deleteConfirm.id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("削除失敗");
@@ -88,6 +94,8 @@ const AdminMaterialList: React.FC = () => {
       await fetchMaterials();
     } catch (err: any) {
       setError((err.message || "削除に失敗しました"));
+    } finally {
+      setDeleteConfirm({ isOpen: false, id: null });
     }
   };
 
@@ -218,6 +226,17 @@ const AdminMaterialList: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="教材の削除"
+        message="本当にこの教材を削除しますか？"
+        confirmText="OK"
+        cancelText="キャンセル"
+        isDangerous={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm({ isOpen: false, id: null })}
+      />
     </div>
   );
 };

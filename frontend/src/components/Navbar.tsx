@@ -52,6 +52,9 @@ const Navbar: React.FC = () => {
                 <Link to="/admin/users/register" className="nav-link" title="ユーザー登録">
                   ユーザー登録
                 </Link>
+                <Link to="/admin/import" className="nav-link" title="CSV一括登録">
+                  CSV一括登録
+                </Link>
               </>
             ) : user.role === "teacher" ? (
               <>
@@ -70,6 +73,10 @@ const Navbar: React.FC = () => {
                 <Link to="/admin/users" className="nav-link" title="ユーザー・クラス管理">
                   ユーザー・クラス管理
                 </Link>
+                <Link to="/admin/import" className="nav-link" title="CSV一括登録">
+                  CSV一括登録
+                </Link>
+              
               </>
             ) : (
               <>

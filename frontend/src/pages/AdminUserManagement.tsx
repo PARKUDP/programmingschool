@@ -37,6 +37,13 @@ const AdminUserManagement: React.FC = () => {
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [members, setMembers] = useState<UserItem[]>([]);
   
+  // 検索とページネーション
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10; // 固定値
+  const [roleFilter, setRoleFilter] = useState<"all" | "student" | "teacher" | "admin">("all");
+  const [classFilter, setClassFilter] = useState<string>("all"); // "all" | "assigned" | "unassigned" | "class-{id}"
+  
   // Create/edit class form
   const [newClassName, setNewClassName] = useState("");
   const [newClassDesc, setNewClassDesc] = useState("");
@@ -139,8 +146,68 @@ const AdminUserManagement: React.FC = () => {
     );
   }, [allUsers, members]);
 
+  // フィルタリングとページネーション
+  const filteredUsers = useMemo(() => {
+    let filtered = allUsers;
+    
+    // 検索フィルタ
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(u => 
+        u.username.toLowerCase().includes(query) ||
+        (u.last_name && u.last_name.toLowerCase().includes(query)) ||
+        (u.first_name && u.first_name.toLowerCase().includes(query)) ||
+        (u.furigana && u.furigana.toLowerCase().includes(query)) ||
+        (u.class_name && u.class_name.toLowerCase().includes(query))
+      );
+    }
+    
+    // ロールフィルタ
+    if (roleFilter !== "all") {
+      filtered = filtered.filter(u => (u.role || "student") === roleFilter);
+    }
+    
+    // クラス所属フィルタ
+    if (classFilter === "assigned") {
+      filtered = filtered.filter(u => u.class_name);
+    } else if (classFilter === "unassigned") {
+      filtered = filtered.filter(u => !u.class_name);
+    } else if (classFilter.startsWith("class-")) {
+      // 特定のクラスIDで絞り込み
+      const classId = parseInt(classFilter.replace("class-", ""));
+      const targetClass = classes.find(c => c.id === classId);
+      if (targetClass) {
+        filtered = filtered.filter(u => u.class_name === targetClass.name);
+      }
+    }
+    
+    return filtered;
+  }, [allUsers, searchQuery, roleFilter, classFilter, classes]);
+
+  // ページネーション計算
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredUsers.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredUsers, currentPage, itemsPerPage]);
+
+  // ページ変更時に現在のページをリセット
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, roleFilter, classFilter]);
+
   // ユーザー編集ダイアログを開く
   const handleOpenEditDialog = (u: UserItem) => {
+    // 先生は生徒のみ編集可能
+    const isTeacher = user?.role === "teacher" && !user?.is_admin;
+    if (isTeacher) {
+      const targetRole = u.role || (u.is_admin ? "admin" : "student");
+      if (targetRole !== "student") {
+        showSnackbar("先生は生徒のみ編集できます", "error");
+        return;
+      }
+    }
+    
     setEditingUser(u);
     setEditFormData({
       last_name: u.last_name || "",
@@ -414,10 +481,68 @@ const AdminUserManagement: React.FC = () => {
       ) : activeTab === "users" ? (
         // ユーザー一覧タブ
         <div className="card">
-          {allUsers.length === 0 ? (
-            <EmptyState title="ユーザーがいません" />
+          {/* 検索とフィルタ */}
+          <div style={{ marginBottom: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "1rem" }}>
+              {/* 検索バー */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="🔍 ユーザー名、氏名、ふりがな、クラスで検索..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ width: "100%" }}
+                />
+              </div>
+              
+              {/* ロールフィルタ */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <select 
+                  className="form-select"
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value as any)}
+                >
+                  <option value="all">すべてのロール</option>
+                  <option value="student">生徒のみ</option>
+                  <option value="teacher">先生のみ</option>
+                  <option value="admin">管理者のみ</option>
+                </select>
+              </div>
+              
+              {/* クラスフィルタ */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <select 
+                  className="form-select"
+                  value={classFilter}
+                  onChange={(e) => setClassFilter(e.target.value as any)}
+                >
+                  <option value="all">すべて</option>
+                  <option value="assigned">クラス所属のみ</option>
+                  <option value="unassigned">未所属のみ</option>
+                  {classes.length > 0 && <option disabled>──────</option>}
+                  {classes.map(c => (
+                    <option key={c.id} value={`class-${c.id}`}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {/* 検索結果の件数表示 */}
+            <div style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+              {filteredUsers.length === allUsers.length ? (
+                `全 ${allUsers.length} 件のユーザー`
+              ) : (
+                `${filteredUsers.length} 件が見つかりました（全 ${allUsers.length} 件中）`
+              )}
+            </div>
+          </div>
+
+          {filteredUsers.length === 0 ? (
+            <EmptyState title={searchQuery ? "該当するユーザーが見つかりません" : "ユーザーがいません"} />
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid var(--border)" }}>
                   <th style={{ padding: "1rem", textAlign: "left", color: "var(--text-secondary)" }}>氏名</th>
@@ -429,7 +554,7 @@ const AdminUserManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {allUsers.map((u) => (
+                {paginatedUsers.map((u) => (
                   <tr key={u.id} style={{ borderBottom: "1px solid var(--border)", opacity: u.id === user.id ? 0.6 : 1 }}>
                     <td style={{ padding: "1rem", fontWeight: "600" }}>
                       {u.last_name || u.first_name ? (
@@ -460,33 +585,121 @@ const AdminUserManagement: React.FC = () => {
                       {u.class_name || <span style={{ color: "var(--text-tertiary, #6b7280)" }}>未所属</span>}
                     </td>
                     <td style={{ padding: "1rem", textAlign: "center" }}>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => handleOpenEditDialog(u)}
-                        style={{ fontSize: "0.85rem", padding: "0.4rem 1rem", marginRight: "0.5rem" }}
-                      >
-                        編集
-                      </button>
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => handleDeleteUser(u.id, u.username)}
-                        disabled={u.id === user.id || !canDeleteUsers}
-                        title={
-                          !canDeleteUsers
-                            ? "ユーザー削除は管理者のみ可能です"
-                            : u.id === user.id
-                              ? "自分自身は削除できません"
-                              : ""
-                        }
-                        style={{ fontSize: "0.85rem", padding: "0.4rem 1rem" }}
-                      >
-                        削除
-                      </button>
+                      {(() => {
+                        const isTeacher = user?.role === "teacher" && !user?.is_admin;
+                        const targetRole = u.role || (u.is_admin ? "admin" : "student");
+                        const canEdit = !isTeacher || targetRole === "student";
+                        
+                        return (
+                          <>
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => handleOpenEditDialog(u)}
+                              disabled={!canEdit}
+                              title={!canEdit ? "先生は生徒のみ編集できます" : ""}
+                              style={{ fontSize: "0.85rem", padding: "0.4rem 1rem", marginRight: "0.5rem" }}
+                            >
+                              編集
+                            </button>
+                            <button
+                              className="btn btn-danger"
+                              onClick={() => handleDeleteUser(u.id, u.username)}
+                              disabled={u.id === user.id || !canDeleteUsers}
+                              title={
+                                !canDeleteUsers
+                                  ? "ユーザー削除は管理者のみ可能です"
+                                  : u.id === user.id
+                                    ? "自分自身は削除できません"
+                                    : ""
+                              }
+                              style={{ fontSize: "0.85rem", padding: "0.4rem 1rem" }}
+                            >
+                              削除
+                            </button>
+                          </>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            
+            {/* ページネーション */}
+            {totalPages > 1 && (
+              <div style={{ 
+                marginTop: "1.5rem", 
+                display: "flex", 
+                justifyContent: "center", 
+                alignItems: "center", 
+                gap: "0.5rem",
+                flexWrap: "wrap"
+              }}>
+                <button
+                  className="btn"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  style={{ padding: "0.5rem 1rem" }}
+                >
+                  ≪
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{ padding: "0.5rem 1rem" }}
+                >
+                  ‹
+                </button>
+                
+                {/* ページ番号ボタン */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      className={currentPage === pageNum ? "btn btn-primary" : "btn"}
+                      onClick={() => setCurrentPage(pageNum)}
+                      style={{ padding: "0.5rem 1rem", minWidth: "2.5rem" }}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                
+                <button
+                  className="btn"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  style={{ padding: "0.5rem 1rem" }}
+                >
+                  ›
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  style={{ padding: "0.5rem 1rem" }}
+                >
+                  ≫
+                </button>
+                
+                <span style={{ marginLeft: "1rem", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
+                  {currentPage} / {totalPages} ページ
+                </span>
+              </div>
+            )}
+            </>
           )}
         </div>
       ) : (

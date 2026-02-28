@@ -19,6 +19,7 @@ import AdminProblemList from "./pages/AdminProblemList";
 import AdminAssignmentManagement from "./pages/AdminAssignmentManagement";
 import GradingPanel from "./pages/GradingPanel";
 import ChangePassword from "./pages/ChangePassword";
+import AdminImport from "./pages/AdminImport";
 import Navbar from "./components/Navbar";
 import { SnackbarProvider } from "./components/SnackbarContext";
 import { useAuth } from "./context/AuthContext";
@@ -32,7 +33,7 @@ function App() {
         <Navbar />
         <div style={{ minHeight: "calc(100vh - 70px)", background: "#ffffff" }}>
           <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
           <Route
             path="/"
             element={user ? ((user.is_admin || user.role === "teacher") ? <Navigate to="/admin/dashboard" /> : <ProblemList />) : <Navigate to="/login" />}
@@ -100,6 +101,10 @@ function App() {
           <Route
             path="/admin/grading"
             element={user && (user.is_admin || user.role === "teacher") ? <GradingPanel /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/admin/import"
+            element={user && (user.is_admin || user.role === "teacher") ? <AdminImport /> : <Navigate to="/login" />}
           />
           <Route
             path="/admin/users/register"

@@ -48,9 +48,27 @@ interface MaterialProgressDetail {
   total: number;
 }
 
+interface User {
+  id: number;
+  username: string;
+  last_name?: string;
+  first_name?: string;
+  furigana?: string;
+  class_name?: string;
+  role?: "student" | "teacher" | "admin";
+  is_admin?: number;
+}
+
 const AdminDashboard: React.FC = () => {
   const { authFetch } = useAuth();
   const [data, setData] = useState<ProgressData | null>(null);
+
+  const getUserDisplayName = (user: User) => {
+    if (user.last_name && user.first_name) {
+      return `${user.last_name} ${user.first_name}`;
+    }
+    return user.username;
+  };
   const [userProgress, setUserProgress] = useState<UserProgress[]>([]);
   const [unsubmittedUsers, setUnsubmittedUsers] = useState<UnsubmittedUser[]>([]);
   const [classes, setClasses] = useState<Array<{id:number; name:string}>>([]);
@@ -58,15 +76,17 @@ const AdminDashboard: React.FC = () => {
   const [classProgress, setClassProgress] = useState<Array<{class_id:number; name:string; members:number; submissions:number; correct:number; accuracy:number}>>([]);
   const [adminMessage, setAdminMessage] = useState<string>("");
   const [adminError, setAdminError] = useState<string>("");
-  const [unassignedUsers, setUnassignedUsers] = useState<Array<{id:number; username:string; is_admin?:number; role?: "student" | "teacher" | "admin"}>>([]);
-  const [classUsers, setClassUsers] = useState<Array<{id:number; username:string; is_admin?:number; role?: "student" | "teacher" | "admin"}>>([]);
-  const [allUsers, setAllUsers] = useState<Array<{id:number; username:string; class_name?: string; role?: "student" | "teacher" | "admin"; is_admin?: number}>>([]);
+  const [unassignedUsers, setUnassignedUsers] = useState<User[]>([]);
+  const [classUsers, setClassUsers] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<{id:number; username:string} | null>(null);
   const [selectedUserMaterials, setSelectedUserMaterials] = useState<MaterialProgressDetail[]>([]);
   const [selectedUserData, setSelectedUserData] = useState<ProgressData | null>(null);
   const [filterUserId, setFilterUserId] = useState<number | "">("");
   const [loading, setLoading] = useState(true);
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [daysPeriod, setDaysPeriod] = useState<7 | 30 | 90 | "all">(30); // 日別提出数の表示期間
+  const [chartWidth, setChartWidth] = useState(600); // グラフの幅
 
   const isStudent = (u: { role?: string; is_admin?: number | boolean }) => (u.role ? u.role === "student" : !u.is_admin);
 
@@ -74,26 +94,63 @@ const AdminDashboard: React.FC = () => {
     setLoading(true);
     Promise.all([
       authFetch(apiEndpoints.progress)
-        .then((res) => res.json())
-        .then((d) => setData(d)),
+        .then(async (res) => {
+          if (!res.ok) return null;
+          return res.json();
+        })
+        .then((d) => {
+          console.log('Admin Progress API Response (全体):', d);
+          if (d && !d.error) setData(d);
+        })
+        .catch((err) => console.error('Failed to fetch progress:', err)),
       authFetch(apiEndpoints.userProgress)
-        .then((res) => res.json())
-        .then((d) => setUserProgress(d)),
+        .then(async (res) => {
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        })
+        .then((d) => setUserProgress(d))
+        .catch((err) => console.error('Failed to fetch userProgress:', err)),
       authFetch(apiEndpoints.unsubmitted)
-        .then((res) => res.json())
-        .then((d) => setUnsubmittedUsers(d)),
+        .then(async (res) => {
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        })
+        .then((d) => setUnsubmittedUsers(d))
+        .catch((err) => console.error('Failed to fetch unsubmitted:', err)),
       authFetch(apiEndpoints.classes)
-        .then((res) => res.json())
-        .then((d) => setClasses(d || [])),
+        .then(async (res) => {
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        })
+        .then((d) => setClasses(d))
+        .catch((err) => console.error('Failed to fetch classes:', err)),
       authFetch(`${apiEndpoints.classes}/progress`)
-        .then((res) => res.json())
-        .then((d) => setClassProgress(d || [])),
+        .then(async (res) => {
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        })
+        .then((d) => setClassProgress(d))
+        .catch((err) => console.error('Failed to fetch class progress:', err)),
       authFetch(apiEndpoints.classesUnassigned)
-        .then((res) => res.json())
-        .then((d) => setUnassignedUsers((d || []).filter((u: any) => isStudent(u)))),
+        .then(async (res) => {
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        })
+        .then((d) => setUnassignedUsers(d.filter((u: any) => isStudent(u))))
+        .catch((err) => console.error('Failed to fetch unassigned users:', err)),
       authFetch(`${API_BASE_URL}/api/users`)
-        .then((res) => res.json())
-        .then((d) => setAllUsers((d || []).filter((u: any) => isStudent(u)))),
+        .then(async (res) => {
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        })
+        .then((d) => setAllUsers(d.filter((u: any) => isStudent(u))))
+        .catch((err) => console.error('Failed to fetch all users:', err)),
     ]).finally(() => setLoading(false));
   }, [authFetch]);
 
@@ -108,25 +165,52 @@ const AdminDashboard: React.FC = () => {
     } else if (selectedClass) {
       // クラス全体で絞り込み
       authFetch(`${apiEndpoints.classes}/${selectedClass}/progress`)
-        .then((res) => res.json())
-        .then((d) => setData(d));
+        .then(async (res) => {
+          if (!res.ok) return null;
+          return res.json();
+        })
+        .then((d) => {
+          if (d && !d.error) setData(d);
+        })
+        .catch((err) => console.error('Failed to fetch class progress:', err));
       authFetch(`${apiEndpoints.classes}/${selectedClass}/user_progress`)
-        .then((res) => res.json())
-        .then((d) => setUserProgress(d || []));
+        .then(async (res) => {
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        })
+        .then((d) => setUserProgress(d))
+        .catch((err) => console.error('Failed to fetch class user progress:', err));
       authFetch(`${apiEndpoints.classes}/${selectedClass}/users`)
-        .then((res) => res.json())
-        .then((d) => setClassUsers((d || []).filter((u: any) => isStudent(u))));
+        .then(async (res) => {
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        })
+        .then((d) => setClassUsers(d.filter((u: any) => isStudent(u))))
+        .catch((err) => console.error('Failed to fetch class users:', err));
       setSelectedUser(null);
       setSelectedUserMaterials([]);
       setSelectedUserData(null);
     } else {
       // 全体表示
       authFetch(apiEndpoints.progress)
-        .then((res) => res.json())
-        .then((d) => setData(d));
+        .then(async (res) => {
+          if (!res.ok) return null;
+          return res.json();
+        })
+        .then((d) => {
+          if (d && !d.error) setData(d);
+        })
+        .catch((err) => console.error('Failed to fetch progress:', err));
       authFetch(apiEndpoints.userProgress)
-        .then((res) => res.json())
-        .then((d) => setUserProgress(d || []));
+        .then(async (res) => {
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        })
+        .then((d) => setUserProgress(d))
+        .catch((err) => console.error('Failed to fetch user progress:', err));
       setClassUsers([]);
       setSelectedUser(null);
       setSelectedUserMaterials([]);
@@ -136,12 +220,18 @@ const AdminDashboard: React.FC = () => {
 
   const loadUserProgressDetail = (uid: number, username: string) => {
     authFetch(`${apiEndpoints.progress}?user_id=${uid}`)
-      .then(res => res.json())
-      .then(d => {
-        setSelectedUser({ id: uid, username });
-        setSelectedUserMaterials(d?.material_progress || []);
-        setSelectedUserData(d); // ユーザーの全データを保存
-      });
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then((d) => {
+        if (d && !d.error) {
+          setSelectedUser({ id: uid, username });
+          setSelectedUserMaterials(d?.material_progress || []);
+          setSelectedUserData(d); // ユーザーの全データを保存
+        }
+      })
+      .catch((err) => console.error('Failed to load user progress:', err));
   };
 
   const handleResetContent = async () => {
@@ -214,7 +304,7 @@ const AdminDashboard: React.FC = () => {
       <PageHeader
         title="管理者ダッシュボード"
         subtitle={filterUserId 
-          ? `${allUsers.find(u => u.id === filterUserId)?.username || ""} さんの個別データを表示しています` 
+          ? `${getUserDisplayName(allUsers.find(u => u.id === filterUserId)!)} さんの個別データを表示しています` 
           : selectedClass 
             ? `クラス「${classes.find(c => c.id === selectedClass)?.name || ""}」全体のデータを表示しています` 
             : "システム全体の状況を確認できます"}
@@ -265,14 +355,14 @@ const AdminDashboard: React.FC = () => {
                 </option>
                 {availableUsers.map(u => (
                   <option key={u.id} value={u.id}>
-                    {u.username}
-                    {!selectedClass && 'class_name' in u && u.class_name ? ` (${u.class_name})` : ''}
+                    {getUserDisplayName(u)}
+                    {!selectedClass && u.class_name ? ` (${u.class_name})` : ''}
                   </option>
                 ))}
               </select>
               {filterUserId && (
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0.5rem 0 0 0' }}>
-                  選択中: {availableUsers.find(u => u.id === filterUserId)?.username}
+                  選択中: {getUserDisplayName(availableUsers.find(u => u.id === filterUserId)!)}
                 </p>
               )}
             </div>
@@ -333,18 +423,128 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="card">
-          <div className="card-title" style={{ borderBottom: '2px solid #3b82f6', paddingBottom: '0.5rem', color: '#3b82f6' }}>
-            日別提出数
-            {filterUserId && <span style={{ fontSize: '0.85rem', marginLeft: '0.5rem', color: 'var(--text-secondary)' }}>({availableUsers.find(u => u.id === filterUserId)?.username})</span>}
+          <div className="card-title" style={{ borderBottom: '2px solid #3b82f6', paddingBottom: '0.5rem', color: '#3b82f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              日別提出数
+              {filterUserId && <span style={{ fontSize: '0.85rem', marginLeft: '0.5rem', color: 'var(--text-secondary)' }}>({availableUsers.find(u => u.id === filterUserId)?.username})</span>}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                className={`btn ${daysPeriod === 7 ? 'btn-primary' : ''}`}
+                onClick={() => setDaysPeriod(7)}
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              >
+                7日間
+              </button>
+              <button
+                className={`btn ${daysPeriod === 30 ? 'btn-primary' : ''}`}
+                onClick={() => setDaysPeriod(30)}
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              >
+                30日間
+              </button>
+              <button
+                className={`btn ${daysPeriod === 90 ? 'btn-primary' : ''}`}
+                onClick={() => setDaysPeriod(90)}
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              >
+                90日間(週別)
+              </button>
+              <button
+                className={`btn ${daysPeriod === 'all' ? 'btn-primary' : ''}`}
+                onClick={() => setDaysPeriod('all')}
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              >
+                全期間(月別)
+              </button>
+            </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '1rem' }}>
-            <BarChart width={450} height={280} data={displayData.daily_counts}>
+          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <label style={{ fontSize: '0.85rem', color: '#6b7280', minWidth: '80px' }}>グラフ幅:</label>
+              <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>狭い</span>
+              <input
+                type="range"
+                min="400"
+                max="1200"
+                step="50"
+                value={chartWidth}
+                onChange={(e) => setChartWidth(Number(e.target.value))}
+                style={{ flex: 1, maxWidth: '300px' }}
+              />
+              <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>広い</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '1rem', overflowX: 'auto' }}>
+            <BarChart 
+              width={chartWidth} 
+              height={280} 
+              data={(() => {
+                const allDailyCounts = displayData.daily_counts || [];
+                
+                // 期間に応じて集計単位を変更
+                if (daysPeriod === 7 || daysPeriod === 30) {
+                  // 7日間、30日間は日別表示
+                  return allDailyCounts.slice(-daysPeriod);
+                } else if (daysPeriod === 90) {
+                  // 90日間は週別集計
+                  const recentData = allDailyCounts.slice(-90);
+                  const weeklyData: { [key: string]: { correct: number; incorrect: number; pending: number; } } = {};
+                  
+                  recentData.forEach(item => {
+                    const date = new Date(item.date);
+                    // 週の開始日（月曜日）を取得
+                    const day = date.getDay();
+                    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+                    const monday = new Date(date.setDate(diff));
+                    const weekKey = monday.toISOString().split('T')[0];
+                    
+                    if (!weeklyData[weekKey]) {
+                      weeklyData[weekKey] = { correct: 0, incorrect: 0, pending: 0 };
+                    }
+                    weeklyData[weekKey].correct += (item as any).correct || 0;
+                    weeklyData[weekKey].incorrect += (item as any).incorrect || 0;
+                    weeklyData[weekKey].pending += (item as any).pending || 0;
+                  });
+                  
+                  return Object.entries(weeklyData)
+                    .map(([date, data]) => ({ date: date + ' (週)', ...data }))
+                    .sort((a, b) => a.date.localeCompare(b.date));
+                } else {
+                  // 全期間は月別集計
+                  const monthlyData: { [key: string]: { correct: number; incorrect: number; pending: number; } } = {};
+                  
+                  allDailyCounts.forEach(item => {
+                    const monthKey = item.date.substring(0, 7); // YYYY-MM
+                    
+                    if (!monthlyData[monthKey]) {
+                      monthlyData[monthKey] = { correct: 0, incorrect: 0, pending: 0 };
+                    }
+                    monthlyData[monthKey].correct += (item as any).correct || 0;
+                    monthlyData[monthKey].incorrect += (item as any).incorrect || 0;
+                    monthlyData[monthKey].pending += (item as any).pending || 0;
+                  });
+                  
+                  return Object.entries(monthlyData)
+                    .map(([date, data]) => ({ date: date + ' (月)', ...data }))
+                    .sort((a, b) => a.date.localeCompare(b.date));
+                }
+              })()}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="date" stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <XAxis 
+                dataKey="date" 
+                stroke="#6b7280" 
+                style={{ fontSize: '12px' }}
+                angle={daysPeriod === 'all' ? -45 : 0}
+                textAnchor={daysPeriod === 'all' ? 'end' : 'middle'}
+                height={daysPeriod === 'all' ? 80 : 30}
+              />
               <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}
                 labelStyle={{ color: '#1f2937' }}
+                formatter={(value: number) => value}
               />
               <Legend wrapperStyle={{ fontSize: '13px', color: '#6b7280' }} />
               <Bar dataKey="correct" stackId="a" fill="#82ca9d" name="正解" />

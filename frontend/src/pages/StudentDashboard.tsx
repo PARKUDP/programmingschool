@@ -33,6 +33,8 @@ const StudentDashboard: React.FC = () => {
   const { user, authFetch } = useAuth();
   const [data, setData] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [daysPeriod, setDaysPeriod] = useState<7 | 30 | 90 | "all">(30); // 日別提出状況の表示期間
+  const [chartWidth, setChartWidth] = useState(800); // グラフの幅
 
   useEffect(() => {
     if (!user) return;
@@ -44,6 +46,7 @@ const StudentDashboard: React.FC = () => {
         return res.json();
       })
       .then((d) => {
+        console.log('Progress API Response:', d);
         setData(d);
         setLoading(false);
       })
@@ -53,6 +56,14 @@ const StudentDashboard: React.FC = () => {
   if (!user) return <div style={{ padding: "2rem" }}>ログインしてください</div>;
   if (loading) return <div style={{ padding: "2rem" }}>読み込み中...</div>;
   if (!data) return <div style={{ padding: "2rem" }}>データを取得できませんでした</div>;
+
+  console.log('Dashboard Data:', {
+    correct: data.correct,
+    incorrect: data.incorrect,
+    pending: data.pending,
+    unsubmitted: data.unsubmitted,
+    total_assignments: data.total_assignments
+  });
 
   const pieData = [
     { name: "正解", value: data.correct },
@@ -249,22 +260,128 @@ const StudentDashboard: React.FC = () => {
             boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
           }}
         >
-          <h3 style={{ fontSize: "16px", fontWeight: "bold", color: "#1a202c", margin: "0 0 1rem 0" }}>
-            日別提出状況
-          </h3>
-          <div style={{ width: "100%", height: "300px" }}>
-            <ResponsiveContainer>
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="correct" name="正解" stackId="a" fill="#10b981" />
-                <Bar dataKey="incorrect" name="不正解" stackId="a" fill="#ef4444" />
-                <Bar dataKey="pending" name="採点待ち" stackId="a" fill="#f59e0b" />
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "bold", color: "#1a202c", margin: 0 }}>
+              日別提出状況
+            </h3>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                className={`btn ${daysPeriod === 7 ? 'btn-primary' : ''}`}
+                onClick={() => setDaysPeriod(7)}
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              >
+                7日間
+              </button>
+              <button
+                className={`btn ${daysPeriod === 30 ? 'btn-primary' : ''}`}
+                onClick={() => setDaysPeriod(30)}
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              >
+                30日間
+              </button>
+              <button
+                className={`btn ${daysPeriod === 90 ? 'btn-primary' : ''}`}
+                onClick={() => setDaysPeriod(90)}
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              >
+                90日間(週別)
+              </button>
+              <button
+                className={`btn ${daysPeriod === 'all' ? 'btn-primary' : ''}`}
+                onClick={() => setDaysPeriod('all')}
+                style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}
+              >
+                全期間(月別)
+              </button>
+            </div>
+          </div>
+          <div style={{ padding: '1rem 0', borderBottom: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <label style={{ fontSize: '0.85rem', color: '#6b7280', minWidth: '80px' }}>グラフ幅:</label>
+              <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>狭い</span>
+              <input
+                type="range"
+                min="400"
+                max="1200"
+                step="50"
+                value={chartWidth}
+                onChange={(e) => setChartWidth(Number(e.target.value))}
+                style={{ flex: 1, maxWidth: '300px' }}
+              />
+              <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>広い</span>
+            </div>
+          </div>
+          <div style={{ width: "100%", height: "300px", overflowX: 'auto' }}>
+            <div style={{ width: chartWidth, height: '100%' }}>
+              <ResponsiveContainer>
+                <BarChart 
+                  data={(() => {
+                    // 期間に応じて集計単位を変更
+                    if (daysPeriod === 7 || daysPeriod === 30) {
+                      // 7日間、30日間は日別表示
+                      return chartData.slice(-daysPeriod);
+                    } else if (daysPeriod === 90) {
+                      // 90日間は週別集計
+                      const recentData = chartData.slice(-90);
+                      const weeklyData: { [key: string]: { correct: number; incorrect: number; pending: number; } } = {};
+                      
+                      recentData.forEach(item => {
+                        const date = new Date(item.date);
+                        // 週の開始日（月曜日）を取得
+                        const day = date.getDay();
+                        const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+                        const monday = new Date(date.setDate(diff));
+                        const weekKey = monday.toISOString().split('T')[0];
+                        
+                        if (!weeklyData[weekKey]) {
+                          weeklyData[weekKey] = { correct: 0, incorrect: 0, pending: 0 };
+                        }
+                        weeklyData[weekKey].correct += item.correct || 0;
+                        weeklyData[weekKey].incorrect += item.incorrect || 0;
+                        weeklyData[weekKey].pending += item.pending || 0;
+                      });
+                      
+                      return Object.entries(weeklyData)
+                        .map(([date, data]) => ({ date: date + ' (週)', ...data }))
+                        .sort((a, b) => a.date.localeCompare(b.date));
+                    } else {
+                      // 全期間は月別集計
+                      const monthlyData: { [key: string]: { correct: number; incorrect: number; pending: number; } } = {};
+                      
+                      chartData.forEach(item => {
+                        const monthKey = item.date.substring(0, 7); // YYYY-MM
+                        
+                        if (!monthlyData[monthKey]) {
+                          monthlyData[monthKey] = { correct: 0, incorrect: 0, pending: 0 };
+                        }
+                        monthlyData[monthKey].correct += item.correct || 0;
+                        monthlyData[monthKey].incorrect += item.incorrect || 0;
+                        monthlyData[monthKey].pending += item.pending || 0;
+                      });
+                      
+                      return Object.entries(monthlyData)
+                        .map(([date, data]) => ({ date: date + ' (月)', ...data }))
+                        .sort((a, b) => a.date.localeCompare(b.date));
+                    }
+                  })()} 
+                  margin={{ top: 20, right: 30, left: 20, bottom: daysPeriod === 'all' ? 60 : 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis 
+                    dataKey="date"
+                    angle={daysPeriod === 'all' ? -45 : 0}
+                    textAnchor={daysPeriod === 'all' ? 'end' : 'middle'}
+                    height={daysPeriod === 'all' ? 80 : 30}
+                  />
+                  <YAxis />
+                  <Tooltip formatter={(value: number) => value} />
+                  <Legend />
+                  <Bar dataKey="correct" name="正解" stackId="a" fill="#10b981" />
+                  <Bar dataKey="incorrect" name="不正解" stackId="a" fill="#ef4444" />
+                  <Bar dataKey="pending" name="採点待ち" stackId="a" fill="#f59e0b" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       </div>

@@ -20,7 +20,14 @@ interface ReviewSubmission {
   selected_choice_text?: string | null;
   submitted_at: string;
   username: string;
+  last_name?: string | null;
+  first_name?: string | null;
+  furigana?: string | null;
   assignment_title: string;
+  lesson_id: number;
+  lesson_title: string;
+  material_id: number;
+  material_title: string;
   question_text?: string | null;
 }
 
@@ -28,6 +35,17 @@ interface Assignment {
   id: number;
   title: string;
   problem_type?: ProblemType;
+}
+
+interface Material {
+  id: number;
+  title: string;
+}
+
+interface Lesson {
+  id: number;
+  title: string;
+  material_id: number;
 }
 
 interface UserSummary {
@@ -43,9 +61,19 @@ interface UserSummary {
 
 interface Filters {
   graded: "all" | "ungraded" | "graded";
+  materialId: number | null;
+  lessonId: number | null;
   assignmentId: number | null;
   problemType: ProblemType | "all";
 }
+
+// ヘルパー関数: ユーザーの表示名を取得
+const getUserDisplayName = (submission: ReviewSubmission): string => {
+  if (submission.last_name || submission.first_name) {
+    return `${submission.last_name || ""} ${submission.first_name || ""}`.trim();
+  }
+  return submission.username;
+};
 
 const GradingPanel: React.FC = () => {
   const { authFetch, user } = useAuth();
@@ -53,8 +81,10 @@ const GradingPanel: React.FC = () => {
 
   const [submissions, setSubmissions] = useState<ReviewSubmission[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<Filters>({ graded: "ungraded", assignmentId: null, problemType: "all" });
+  const [filters, setFilters] = useState<Filters>({ graded: "ungraded", materialId: null, lessonId: null, assignmentId: null, problemType: "all" });
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -95,6 +125,14 @@ const GradingPanel: React.FC = () => {
       const assignmentsData = await assignmentsRes.json();
       const assignmentList = (Array.isArray(assignmentsData) ? assignmentsData : assignmentsData.assignments || []);
       setAssignments(assignmentList);
+
+      const materialsRes = await authFetch(apiEndpoints.materials);
+      const materialsData = await materialsRes.json();
+      setMaterials(Array.isArray(materialsData) ? materialsData : []);
+
+      const lessonsRes = await authFetch(apiEndpoints.lessons);
+      const lessonsData = await lessonsRes.json();
+      setLessons(Array.isArray(lessonsData) ? lessonsData : []);
     } catch (err: any) {
       console.error("データ読み込みエラー:", err);
       showSnackbar(err.message || "データの読み込みに失敗しました", "error");
@@ -106,16 +144,33 @@ const GradingPanel: React.FC = () => {
   const filteredSubmissions = submissions.filter((sub) => {
     if (filters.graded === "graded" && sub.is_correct === null) return false;
     if (filters.graded === "ungraded" && sub.is_correct !== null) return false;
+    if (filters.materialId && sub.material_id !== filters.materialId) return false;
+    if (filters.lessonId && sub.lesson_id !== filters.lessonId) return false;
     if (filters.assignmentId && sub.assignment_id !== filters.assignmentId) return false;
     if (filters.problemType !== "all" && sub.problem_type !== filters.problemType) return false;
     return true;
   });
 
+  // フィルタリングされたレッスンと宿題
+  const filteredLessons = filters.materialId 
+    ? lessons.filter(l => l.material_id === filters.materialId)
+    : lessons;
+  
+  const filteredAssignments = filters.lessonId
+    ? assignments.filter(a => {
+        const lesson = lessons.find(l => l.id === filters.lessonId);
+        if (!lesson) return false;
+        // submissionsから該当するassignmentのlesson_idを見つける
+        return submissions.some(s => s.assignment_id === a.id && s.lesson_id === filters.lessonId);
+      })
+    : assignments;
+
   const userSummaryMap = filteredSubmissions.reduce((acc, sub) => {
+    const displayName = getUserDisplayName(sub);
     const current: UserSummary =
       acc.get(sub.user_id) || {
         userId: sub.user_id,
-        username: sub.username,
+        username: displayName,
         total: 0,
         graded: 0,
         ungraded: 0,
@@ -126,6 +181,7 @@ const GradingPanel: React.FC = () => {
 
     const updated: UserSummary = {
       ...current,
+      username: displayName, // 最新の表示名で更新
       total: current.total + 1,
       graded: current.graded + (sub.is_correct === null ? 0 : 1),
       ungraded: current.ungraded + (sub.is_correct === null ? 1 : 0),
@@ -301,6 +357,66 @@ const GradingPanel: React.FC = () => {
                   </div>
 
                   <div>
+                    <label style={{ display: "block", fontWeight: "700", marginBottom: "0.4rem" }}>教材</label>
+                    <select
+                      value={filters.materialId || ""}
+                      onChange={(e) => {
+                        const materialId = e.target.value ? Number(e.target.value) : null;
+                        setFilters({
+                          ...filters,
+                          materialId,
+                          lessonId: null,
+                          assignmentId: null
+                        });
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem",
+                        border: "2px solid #e0e7ff",
+                        borderRadius: "0.5rem",
+                        backgroundColor: "#fff",
+                      }}
+                    >
+                      <option value="">すべての教材</option>
+                      {materials.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontWeight: "700", marginBottom: "0.4rem" }}>レッスン</label>
+                    <select
+                      value={filters.lessonId || ""}
+                      onChange={(e) => {
+                        const lessonId = e.target.value ? Number(e.target.value) : null;
+                        setFilters({
+                          ...filters,
+                          lessonId,
+                          assignmentId: null
+                        });
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem",
+                        border: "2px solid #e0e7ff",
+                        borderRadius: "0.5rem",
+                        backgroundColor: "#fff",
+                      }}
+                      disabled={!filters.materialId}
+                    >
+                      <option value="">すべてのレッスン</option>
+                      {filteredLessons.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
                     <label style={{ display: "block", fontWeight: "700", marginBottom: "0.4rem" }}>問題タイプ</label>
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
                       {( ["all", "essay", "choice", "code"] as const).map((type) => (
@@ -343,9 +459,10 @@ const GradingPanel: React.FC = () => {
                         borderRadius: "0.5rem",
                         backgroundColor: "#fff",
                       }}
+                      disabled={!filters.lessonId}
                     >
                       <option value="">すべての宿題</option>
-                      {assignments.map((a) => (
+                      {filteredAssignments.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.title}
                         </option>
@@ -504,7 +621,13 @@ const GradingPanel: React.FC = () => {
                       }}
                     >
                       <div style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
-                        提出者: <strong>{selectedSubmission.username}</strong>
+                        提出者: <strong>{getUserDisplayName(selectedSubmission)}</strong>
+                      </div>
+                      <div style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                        教材: <strong>{selectedSubmission.material_title}</strong>
+                      </div>
+                      <div style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                        レッスン: <strong>{selectedSubmission.lesson_title}</strong>
                       </div>
                       <div style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
                         問題: <strong>{selectedSubmission.assignment_title}</strong>
@@ -604,13 +727,17 @@ const GradingPanel: React.FC = () => {
                       <h4 style={{ marginBottom: "0.5rem" }}>フィードバック</h4>
                       <div
                         style={{
-                          backgroundColor: "#f8fafc",
-                          border: "1px solid #e5e7eb",
-                          borderRadius: "0.5rem",
-                          padding: "0.75rem",
+                          backgroundColor: "#f0f9ff",
+                          border: "2px solid #bae6fd",
+                          borderRadius: "8px",
+                          padding: "1.25rem",
                           minHeight: "60px",
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
+                          fontSize: "0.95rem",
+                          lineHeight: "1.8",
+                          color: "#0c4a6e",
+                          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)"
                         }}
                       >
                         {selectedSubmission.feedback || "（フィードバックなし）"}

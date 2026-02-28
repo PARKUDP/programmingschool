@@ -61,17 +61,26 @@ const ProblemSolve: React.FC = () => {
 
   useEffect(() => {
     if (!assignmentId) return;
-    fetchAssignmentData();
+    
+    const abortController = new AbortController();
+    fetchAssignmentData(abortController);
+    
+    return () => {
+      abortController.abort();
+    };
   }, [assignmentId]);
 
-  const fetchAssignmentData = async () => {
+  const fetchAssignmentData = async (abortController?: AbortController) => {
+    const signal = abortController?.signal;
+    
     try {
-      const assignmentRes = await authFetch(`${apiEndpoints.assignments}/${assignmentId}`);
+      const assignmentRes = await authFetch(`${apiEndpoints.assignments}/${assignmentId}`, { signal });
       if (!assignmentRes.ok) throw new Error("宿題の取得に失敗しました");
       const assignmentData = await assignmentRes.json();
       // 既存提出の取得
       const submissionRes = await authFetch(
-        `${apiEndpoints.submissions}?assignment_id=${assignmentId}`
+        `${apiEndpoints.submissions}?assignment_id=${assignmentId}`,
+        { signal }
       );
       if (submissionRes.ok) {
         const submissions = await submissionRes.json();
@@ -87,7 +96,8 @@ const ProblemSolve: React.FC = () => {
       // 選択肢を常に取得して、タイプが無い場合のフォールバックに使う
       let fetchedChoices: ChoiceOption[] = [];
       const choicesRes = await authFetch(
-        `${apiEndpoints.assignments}/${assignmentId}/choices`
+        `${apiEndpoints.assignments}/${assignmentId}/choices`,
+        { signal }
       );
       if (choicesRes.ok) {
         const choices = await choicesRes.json();
@@ -98,10 +108,17 @@ const ProblemSolve: React.FC = () => {
       const finalType: ProblemType = (assignmentData.problem_type as ProblemType) || (fetchedChoices.length > 0 ? "choice" : "code");
       setAssignment({ ...assignmentData, problem_type: finalType });
     } catch (err: any) {
+      // AbortErrorまたはキャンセルエラーは無視（コンポーネントのアンマウント時の正常な動作）
+      if (err.name === 'AbortError' || err.type === 'cancelation' || signal?.aborted) {
+        // 開発環境でのキャンセルは正常な動作なので何もしない
+        return;
+      }
       setError(err.message || "エラーが発生しました");
       showSnackbar("エラーが発生しました", "error");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   };
 
@@ -125,7 +142,7 @@ const ProblemSolve: React.FC = () => {
       }
       showSnackbar(
         data.is_correct ? "テストケースに合格しました！" : "テストケースが失敗しました",
-        data.is_correct ? "success" : "info"
+        data.is_correct ? "success" : "error"
       );
       await fetchAssignmentData();
     } catch (err: any) {
@@ -185,7 +202,7 @@ const ProblemSolve: React.FC = () => {
       const result = await res.json();
       showSnackbar(
         result?.is_correct ? "正解です！" : "不正解です",
-        result?.is_correct ? "success" : "info"
+        result?.is_correct ? "success" : "error"
       );
       await fetchAssignmentData();
     } catch (err: any) {
@@ -296,31 +313,47 @@ const ProblemSolve: React.FC = () => {
           <div className="card-title">答案を提出</div>
 
           {existingSubmission && (
-            <div className={`message ${existingSubmission.is_correct === 1 ? "message-success" : existingSubmission.is_correct === 0 ? "message-error" : "message-info"}`} style={{ marginBottom: "1rem" }}>
-              {existingSubmission.is_correct === 1 && (
-                <>
-                  <strong>✓ 正解</strong>
-                  <p>このテストケースに合格しました。</p>
-                </>
-              )}
-              {existingSubmission.is_correct === 0 && (
-                <>
-                  <strong>✗ 不正解</strong>
-                  <p>答え直してみてください。</p>
-                </>
-              )}
-              {existingSubmission.is_correct === null && (
-                <>
-                  <strong>採点待機中</strong>
-                  <p>講師による採点をお待ちください。</p>
-                </>
-              )}
+            <>
+              <div className={`message ${existingSubmission.is_correct === 1 ? "message-success" : existingSubmission.is_correct === 0 ? "message-error" : "message-info"}`} style={{ marginBottom: "1rem" }}>
+                {existingSubmission.is_correct === 1 && (
+                  <>
+                    <strong>✓ 正解</strong>
+                    <p>このテストケースに合格しました。</p>
+                  </>
+                )}
+                {existingSubmission.is_correct === 0 && (
+                  <>
+                    <strong>✗ 不正解</strong>
+                    <p>答え直してみてください。</p>
+                  </>
+                )}
+                {existingSubmission.is_correct === null && (
+                  <>
+                    <strong>採点待機中</strong>
+                    <p>講師による採点をお待ちください。</p>
+                  </>
+                )}
+              </div>
+              
               {existingSubmission.feedback && (
-                <p style={{ marginTop: "0.75rem" }}>
-                  <strong>フィードバック:</strong> {existingSubmission.feedback}
-                </p>
+                <div style={{ marginBottom: "1rem" }}>
+                  <h4 style={{ fontSize: "0.95rem", fontWeight: "600", marginBottom: "0.5rem", color: "#374151" }}>フィードバック</h4>
+                  <div style={{ 
+                    whiteSpace: "pre-wrap",
+                    backgroundColor: "#f0f9ff",
+                    padding: "1.25rem",
+                    borderRadius: "8px",
+                    border: "2px solid #bae6fd",
+                    fontSize: "0.95rem",
+                    lineHeight: "1.8",
+                    color: "#0c4a6e",
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)"
+                  }}>
+                    {existingSubmission.feedback}
+                  </div>
+                </div>
               )}
-            </div>
+            </>
           )}
 
           {assignment.problem_type === "code" && (

@@ -1,4 +1,7 @@
 <?php
+// タイムゾーンを日本時間に設定
+date_default_timezone_set('Asia/Tokyo');
+
 // エラーハンドリングの設定
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
@@ -255,13 +258,13 @@ if ($path === '/api/register' && $method === 'POST') {
 if ($path === '/api/login' && $method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     if (!isset($data['username']) || !isset($data['password'])) {
-        json_response(['error' => 'username and password required'], 400);
+        json_response(['error' => 'ユーザー名とパスワードが必要です'], 400);
     }
     $stmt = $pdo->prepare('SELECT id, password_hash, is_admin, role FROM user WHERE username = ?');
     $stmt->execute([$data['username']]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$user || !password_verify($data['password'], $user['password_hash'])) {
-        json_response(['error' => 'invalid credentials'], 401);
+        json_response(['error' => 'ユーザー名またはパスワードが正しくありません'], 401);
     }
     $role = $user['role'] ?? ($user['is_admin'] ? 'admin' : 'student');
     $token = generate_jwt(['id' => $user['id'], 'username' => $data['username'], 'is_admin' => (int)$user['is_admin'], 'role' => $role], $secret);
@@ -435,11 +438,24 @@ if (preg_match('#^/api/users/(\d+)$#', $path, $m) && $method === 'PUT') {
     $uid = (int)$m[1];
     $data = json_decode(file_get_contents('php://input'), true);
     
-    // 更新対象のユーザーが存在するか確認
-    $stmt = $pdo->prepare('SELECT id FROM user WHERE id = ?');
+    // 更新対象のユーザー情報を取得
+    $stmt = $pdo->prepare('SELECT id, role, is_admin FROM user WHERE id = ?');
     $stmt->execute([$uid]);
-    if (!$stmt->fetch()) {
+    $target_user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$target_user) {
         json_response(['error' => 'User not found'], 404);
+    }
+    
+    // 先生の場合、生徒のみ編集可能（管理者や他の先生は編集不可）
+    $is_teacher_role = ($current_user['role'] ?? null) === 'teacher' && !($current_user['is_admin'] ?? false);
+    if ($is_teacher_role) {
+        $target_role = $target_user['role'] ?? 'student';
+        $target_is_admin = (bool)($target_user['is_admin'] ?? false);
+        
+        // 対象が生徒でない場合はエラー
+        if ($target_role !== 'student' || $target_is_admin) {
+            json_response(['error' => '先生は生徒のみ編集できます'], 403);
+        }
     }
     
     // 更新フィールド（ロールとパスワードは管理者のみ）
@@ -508,9 +524,9 @@ if (preg_match('#^/api/users/(\d+)$#', $path, $m) && $method === 'PUT') {
     json_response(['message' => 'User updated']);
 }
 
-// 管理者・先生によるユーザー削除（退会想定）
+// 管理者によるユーザー削除（退会想定）
 if (preg_match('#^/api/users/(\d+)$#', $path, $m) && $method === 'DELETE') {
-    require_teacher();
+    require_admin();
     $uid = (int)$m[1];
     if ($uid === ($current_user['id'] ?? -1)) {
         json_response(['error' => 'cannot delete yourself'], 400);
@@ -518,6 +534,9 @@ if (preg_match('#^/api/users/(\d+)$#', $path, $m) && $method === 'DELETE') {
     // 外部キーON DELETE CASCADEのため関連データは自動削除（submission）
     $stmt = $pdo->prepare('DELETE FROM user WHERE id = ?');
     $stmt->execute([$uid]);
+    // ユーザーのキャッシュをクリア
+    cache_delete('progress_' . $uid);
+    cache_delete('progress_all');
     json_response(['message' => 'User deleted']);
 }
 
@@ -612,7 +631,11 @@ if (preg_match('#^/api/classes/(\d+)/users$#', $path, $m) && $method === 'POST')
     $upd = $pdo->prepare('UPDATE user SET class_id = ? WHERE id = ? AND role = "student"');
     foreach ($user_ids as $uid) {
         $upd->execute([$class_id, (int)$uid]);
+        // ユーザーのキャッシュをクリア
+        cache_delete('progress_' . $uid);
     }
+    // 全体のキャッシュもクリア
+    cache_delete('progress_all');
     json_response(['message' => 'Users added']);
 }
 
@@ -627,7 +650,11 @@ if (preg_match('#^/api/classes/(\d+)/users$#', $path, $m) && $method === 'DELETE
     $del = $pdo->prepare('UPDATE user SET class_id = NULL WHERE id = ? AND class_id = ?');
     foreach ($user_ids as $uid) {
         $del->execute([(int)$uid, $class_id]);
+        // ユーザーのキャッシュをクリア
+        cache_delete('progress_' . $uid);
     }
+    // 全体のキャッシュもクリア
+    cache_delete('progress_all');
     json_response(['message' => 'Users removed']);
 }
 
@@ -1444,7 +1471,11 @@ PY;
             $passed = outputs_match($expected, $result_text);
             if (!$passed) {
                 $all_passed = false;
-                $output .= "入力:\n{$case['input']}\n\n期待される出力:\n{$expected}\n\nあなたの出力:\n{$result_text}\n\n";
+                $output .= "━━━━━━━━━━━━━━━━━━━━━━━━\n";
+                $output .= "入力:\n{$case['input']}\n\n";
+                $output .= "期待される出力:\n{$expected}\n\n";
+                $output .= "あなたの出力:\n{$result_text}\n";
+                $output .= "━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
             }
             unlink($tmp);
             if (!$all_passed) break;
@@ -1458,12 +1489,12 @@ PY;
         $problem_type,
         $data['code'],
         $all_passed ? 1 : 0,
-        $all_passed ? 'すべてのテストケースに合格しました！' : 'いくつかのテストケースが失敗しました\n\n' . $output
+        $all_passed ? 'すべてのテストケースに合格しました！' : "いくつかのテストケースが失敗しました\n\n" . $output
     ]);
 
     clear_progress_cache_all();
 
-    json_response(['message' => 'Submission processed', 'is_correct' => $all_passed ? 1 : 0, 'feedback' => $all_passed ? 'すべてのテストケースに合格しました！' : 'いくつかのテストケースが失敗しました\n\n' . $output]);
+    json_response(['message' => 'Submission processed', 'is_correct' => $all_passed ? 1 : 0, 'feedback' => $all_passed ? 'すべてのテストケースに合格しました！' : "いくつかのテストケースが失敗しました\n\n" . $output]);
 }
 
 // コード実行のみ（提出はしないプレビュー用）
@@ -1771,13 +1802,19 @@ if ($path === '/api/submissions/review' && $method === 'GET') {
 
     $sql = "SELECT s.id, s.user_id, s.assignment_id, s.is_correct, s.feedback, s.code, s.answer_text, s.selected_choice_id, 
                    COALESCE(s.problem_type, a.problem_type) AS problem_type, s.submitted_at,
-                   u.username,
+                   u.username, u.last_name, u.first_name, u.furigana,
                    a.title AS assignment_title,
+                   a.lesson_id,
+                   l.title AS lesson_title,
+                   l.material_id,
+                   m.title AS material_title,
                    a.question_text,
                    (SELECT option_text FROM choice_option WHERE id = s.selected_choice_id LIMIT 1) AS selected_choice_text
             FROM submission s
             INNER JOIN user u ON s.user_id = u.id
             INNER JOIN assignment a ON s.assignment_id = a.id
+            INNER JOIN lesson l ON a.lesson_id = l.id
+            INNER JOIN material m ON l.material_id = m.id
             $whereSql
             ORDER BY s.submitted_at DESC";
     $stmt = $pdo->prepare($sql);
@@ -1877,15 +1914,30 @@ if ($path === '/api/progress' && $method === 'GET') {
         $totalStmt->execute([$user_id]);
         $totalSub = (int)$totalStmt->fetchColumn();
 
-        // 各課題の最新提出状態を取得（SQLite 互換）
-        $latestSql = 'SELECT assignment_id, is_correct FROM submission 
-                      WHERE user_id = ? AND id IN (
-                        SELECT MAX(id) FROM submission 
-                        WHERE user_id = ? 
+        // 各課題の最新提出状態を取得（現在割り当てられている課題のみ）
+        // まず最新の提出IDを取得してから、その提出を取得する
+        $latestSql = 'SELECT s.assignment_id, s.is_correct 
+                      FROM submission s
+                      INNER JOIN (
+                        SELECT assignment_id, MAX(id) as max_id
+                        FROM submission
+                        WHERE user_id = ?
                         GROUP BY assignment_id
+                      ) latest ON s.id = latest.max_id
+                      WHERE EXISTS (
+                        SELECT 1 FROM assignment a WHERE a.id = s.assignment_id
+                        AND (
+                            EXISTS (SELECT 1 FROM assignment_target t WHERE t.assignment_id=a.id AND t.target_type="all")
+                            OR EXISTS (SELECT 1 FROM assignment_target t WHERE t.assignment_id=a.id AND t.target_type="user" AND t.target_id = ?)
+                            OR EXISTS (
+                                SELECT 1 FROM assignment_target t
+                                WHERE t.assignment_id=a.id AND t.target_type="class" 
+                                AND t.target_id = (SELECT class_id FROM user WHERE id = ? AND class_id IS NOT NULL)
+                            )
+                        )
                       )';
         $latestStmt = $pdo->prepare($latestSql);
-        $latestStmt->execute([$user_id, $user_id]);
+        $latestStmt->execute([$user_id, $user_id, $user_id]);
         $latestStatuses = $latestStmt->fetchAll(PDO::FETCH_ASSOC);
         
         $correct = 0;
@@ -1901,9 +1953,23 @@ if ($path === '/api/progress' && $method === 'GET') {
             }
         }
 
-        // 少なくとも1回提出した異なる課題の数
-        $attemptedStmt = $pdo->prepare('SELECT COUNT(DISTINCT assignment_id) FROM submission WHERE user_id = ?');
-        $attemptedStmt->execute([$user_id]);
+        // 現在割り当てられている課題のうち、少なくとも1回提出した課題の数
+        $attemptedSql = 'SELECT COUNT(DISTINCT s.assignment_id) FROM submission s
+                         WHERE s.user_id = ?
+                         AND EXISTS (
+                            SELECT 1 FROM assignment a WHERE a.id = s.assignment_id
+                            AND (
+                                EXISTS (SELECT 1 FROM assignment_target t WHERE t.assignment_id=a.id AND t.target_type="all")
+                                OR EXISTS (SELECT 1 FROM assignment_target t WHERE t.assignment_id=a.id AND t.target_type="user" AND t.target_id = ?)
+                                OR EXISTS (
+                                    SELECT 1 FROM assignment_target t
+                                    WHERE t.assignment_id=a.id AND t.target_type="class" 
+                                    AND t.target_id = (SELECT class_id FROM user WHERE id = ? AND class_id IS NOT NULL)
+                                )
+                            )
+                         )';
+        $attemptedStmt = $pdo->prepare($attemptedSql);
+        $attemptedStmt->execute([$user_id, $user_id, $user_id]);
         $attempted = (int)$attemptedStmt->fetchColumn();
 
         // ユーザーに配布された宿題総数（all/user/class のみ）
@@ -1921,11 +1987,28 @@ if ($path === '/api/progress' && $method === 'GET') {
         $totalStmt = $pdo->query('SELECT COUNT(*) FROM submission');
         $totalSub = (int)$totalStmt->fetchColumn();
 
-        // 全体の最新提出状態を取得（SQLite 互換）
-        $latestSql = 'SELECT assignment_id, user_id, is_correct FROM submission 
-                      WHERE id IN (
-                        SELECT MAX(id) FROM submission 
+        // 全体の最新提出状態を取得（現在割り当てられている課題のみ）
+        $latestSql = 'SELECT s.assignment_id, s.user_id, s.is_correct 
+                      FROM submission s
+                      INNER JOIN (
+                        SELECT assignment_id, user_id, MAX(id) as max_id
+                        FROM submission
                         GROUP BY assignment_id, user_id
+                      ) latest ON s.id = latest.max_id
+                      WHERE EXISTS (
+                        SELECT 1 FROM assignment a
+                        INNER JOIN user u ON u.id = s.user_id
+                        WHERE a.id = s.assignment_id
+                        AND u.role = "student"
+                        AND (
+                            EXISTS (SELECT 1 FROM assignment_target t WHERE t.assignment_id=a.id AND t.target_type="all")
+                            OR EXISTS (SELECT 1 FROM assignment_target t WHERE t.assignment_id=a.id AND t.target_type="user" AND t.target_id = u.id)
+                            OR EXISTS (
+                                SELECT 1 FROM assignment_target t
+                                WHERE t.assignment_id=a.id AND t.target_type="class" 
+                                AND t.target_id = u.class_id AND u.class_id IS NOT NULL
+                            )
+                        )
                       )';
         $latestStmt = $pdo->query($latestSql);
         $latestStatuses = $latestStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1943,8 +2026,24 @@ if ($path === '/api/progress' && $method === 'GET') {
             }
         }
 
-        // 少なくとも1回提出した異なる課題の数
-        $attemptedStmt = $pdo->query('SELECT COUNT(DISTINCT assignment_id) FROM submission');
+        // 現在割り当てられている課題のうち、少なくとも1回提出した課題の数
+        $attemptedSql = 'SELECT COUNT(DISTINCT CONCAT(s.assignment_id, "-", s.user_id)) FROM submission s
+                         WHERE EXISTS (
+                            SELECT 1 FROM assignment a
+                            INNER JOIN user u ON u.id = s.user_id
+                            WHERE a.id = s.assignment_id
+                            AND u.role = "student"
+                            AND (
+                                EXISTS (SELECT 1 FROM assignment_target t WHERE t.assignment_id=a.id AND t.target_type="all")
+                                OR EXISTS (SELECT 1 FROM assignment_target t WHERE t.assignment_id=a.id AND t.target_type="user" AND t.target_id = u.id)
+                                OR EXISTS (
+                                    SELECT 1 FROM assignment_target t
+                                    WHERE t.assignment_id=a.id AND t.target_type="class" 
+                                    AND t.target_id = u.class_id AND u.class_id IS NOT NULL
+                                )
+                            )
+                         )';
+        $attemptedStmt = $pdo->query($attemptedSql);
         $attempted = (int)$attemptedStmt->fetchColumn();
     }
     if (!$user_id) {
@@ -2180,6 +2279,256 @@ if ($path === '/api/essay-submissions' && $method === 'GET') {
     $stmt = $pdo->prepare("SELECT es.id, es.user_id, es.problem_id, es.answer_text, es.is_graded, es.grade, es.feedback, es.submitted_at, es.graded_at, u.username, p.title as problem_title FROM essay_submission es LEFT JOIN user u ON es.user_id = u.id LEFT JOIN problem p ON es.problem_id = p.id $where_clause ORDER BY es.submitted_at DESC");
     $stmt->execute($params);
     json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+// CSVインポート - 教材
+if ($path === '/api/import/materials' && $method === 'POST') {
+    require_admin();
+    
+    if (!isset($_FILES['csv']) || $_FILES['csv']['error'] !== UPLOAD_ERR_OK) {
+        json_response(['error' => 'CSVファイルのアップロードに失敗しました'], 400);
+    }
+    
+    $file = $_FILES['csv']['tmp_name'];
+    $handle = fopen($file, 'r');
+    
+    if (!$handle) {
+        json_response(['error' => 'ファイルを開けませんでした'], 400);
+    }
+    
+    // ヘッダー行をスキップ
+    $header = fgetcsv($handle);
+    
+    $imported = 0;
+    $errors = [];
+    $pdo->beginTransaction();
+    
+    try {
+        while (($data = fgetcsv($handle)) !== false) {
+            if (count($data) < 2) {
+                $errors[] = "行をスキップ: データが不足しています";
+                continue;
+            }
+            
+            $title = trim($data[0]);
+            $description = trim($data[1]);
+            
+            if (empty($title)) {
+                $errors[] = "タイトルが空です";
+                continue;
+            }
+            
+            // \\n を実際の改行に変換
+            $description_processed = str_replace('\\n', "\n", $description);
+            
+            $stmt = $pdo->prepare('INSERT INTO material (title, description) VALUES (?, ?)');
+            $stmt->execute([$title, $description_processed]);
+            $imported++;
+        }
+        
+        $pdo->commit();
+        fclose($handle);
+        json_response([
+            'success' => true,
+            'imported' => $imported,
+            'errors' => $errors
+        ]);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        fclose($handle);
+        json_response(['error' => 'インポート中にエラーが発生しました: ' . $e->getMessage()], 500);
+    }
+}
+
+// CSVインポート - レッスン
+if ($path === '/api/import/lessons' && $method === 'POST') {
+    require_admin();
+    
+    if (!isset($_FILES['csv']) || $_FILES['csv']['error'] !== UPLOAD_ERR_OK) {
+        json_response(['error' => 'CSVファイルのアップロードに失敗しました'], 400);
+    }
+    
+    $file = $_FILES['csv']['tmp_name'];
+    $handle = fopen($file, 'r');
+    
+    if (!$handle) {
+        json_response(['error' => 'ファイルを開けませんでした'], 400);
+    }
+    
+    // ヘッダー行をスキップ
+    $header = fgetcsv($handle);
+    
+    $imported = 0;
+    $errors = [];
+    $pdo->beginTransaction();
+    
+    try {
+        while (($data = fgetcsv($handle)) !== false) {
+            if (count($data) < 3) {
+                $errors[] = "行をスキップ: データが不足しています";
+                continue;
+            }
+            
+            $material_ref = trim($data[0]);
+            $title = trim($data[1]);
+            $description = trim($data[2]);
+            
+            if (empty($title) || empty($material_ref)) {
+                $errors[] = "タイトルまたは教材名が無効です";
+                continue;
+            }
+            
+            // 教材を名前またはIDで検索
+            $material_id = null;
+            if (is_numeric($material_ref)) {
+                $check = $pdo->prepare('SELECT id FROM material WHERE id = ?');
+                $check->execute([(int)$material_ref]);
+                $row = $check->fetch();
+                if ($row) $material_id = (int)$row['id'];
+            } else {
+                $check = $pdo->prepare('SELECT id FROM material WHERE title = ?');
+                $check->execute([$material_ref]);
+                $row = $check->fetch();
+                if ($row) $material_id = (int)$row['id'];
+            }
+            
+            if (!$material_id) {
+                $errors[] = "教材 '{$material_ref}' が見つかりません（ID または 教材名で指定）";
+                continue;
+            }
+            
+            // \n を実際の改行に変換
+            $description_processed = str_replace('\\n', "\n", $description);
+            
+            $stmt = $pdo->prepare('INSERT INTO lesson (material_id, title, description) VALUES (?, ?, ?)');
+            $stmt->execute([$material_id, $title, $description_processed]);
+            $imported++;
+        }
+        
+        $pdo->commit();
+        fclose($handle);
+        json_response([
+            'success' => true,
+            'imported' => $imported,
+            'errors' => $errors
+        ]);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        fclose($handle);
+        json_response(['error' => 'インポート中にエラーが発生しました: ' . $e->getMessage()], 500);
+    }
+}
+
+// CSVインポート - 宿題
+if ($path === '/api/import/assignments' && $method === 'POST') {
+    require_admin();
+    
+    if (!isset($_FILES['csv']) || $_FILES['csv']['error'] !== UPLOAD_ERR_OK) {
+        json_response(['error' => 'CSVファイルのアップロードに失敗しました'], 400);
+    }
+    
+    $file = $_FILES['csv']['tmp_name'];
+    $handle = fopen($file, 'r');
+    
+    if (!$handle) {
+        json_response(['error' => 'ファイルを開けませんでした'], 400);
+    }
+    
+    // ヘッダー行をスキップ
+    $header = fgetcsv($handle);
+    
+    $imported = 0;
+    $errors = [];
+    $pdo->beginTransaction();
+    
+    try {
+        while (($data = fgetcsv($handle)) !== false) {
+            if (count($data) < 6) {
+                $errors[] = "行をスキップ: データが不足しています";
+                continue;
+            }
+            
+            $material_ref = trim($data[0]);
+            $lesson_ref = trim($data[1]);
+            $title = trim($data[2]);
+            $description = trim($data[3]);
+            $problem_type = trim($data[4]);
+            $question_text = trim($data[5]);
+            $expected_output = isset($data[6]) ? trim($data[6]) : '';
+            $input_example = isset($data[7]) ? trim($data[7]) : '';
+            
+            if (empty($title) || empty($material_ref) || empty($lesson_ref)) {
+                $errors[] = "タイトル、教材名、またはレッスン名が無効です";
+                continue;
+            }
+            
+            if (!in_array($problem_type, ['code', 'choice', 'essay'])) {
+                $errors[] = "問題タイプが無効です: {$problem_type}";
+                continue;
+            }
+            
+            // 教材を名前またはIDで検索
+            $material_id = null;
+            if (is_numeric($material_ref)) {
+                $check = $pdo->prepare('SELECT id FROM material WHERE id = ?');
+                $check->execute([(int)$material_ref]);
+                $row = $check->fetch();
+                if ($row) $material_id = (int)$row['id'];
+            } else {
+                $check = $pdo->prepare('SELECT id FROM material WHERE title = ?');
+                $check->execute([$material_ref]);
+                $row = $check->fetch();
+                if ($row) $material_id = (int)$row['id'];
+            }
+            
+            if (!$material_id) {
+                $errors[] = "教材 '{$material_ref}' が見つかりません";
+                continue;
+            }
+            
+            // レッスンを名前またはIDで検索（教材配下で検索）
+            $lesson_id = null;
+            if (is_numeric($lesson_ref)) {
+                $check = $pdo->prepare('SELECT id FROM lesson WHERE id = ? AND material_id = ?');
+                $check->execute([(int)$lesson_ref, $material_id]);
+                $row = $check->fetch();
+                if ($row) $lesson_id = (int)$row['id'];
+            } else {
+                $check = $pdo->prepare('SELECT id FROM lesson WHERE title = ? AND material_id = ?');
+                $check->execute([$lesson_ref, $material_id]);
+                $row = $check->fetch();
+                if ($row) $lesson_id = (int)$row['id'];
+            }
+            
+            if (!$lesson_id) {
+                $errors[] = "教材 '{$material_ref}' 配下のレッスン '{$lesson_ref}' が見つかりません";
+                continue;
+            }
+            
+            $statement = $pdo->prepare('INSERT INTO assignment (lesson_id, title, description, problem_type, question_text, expected_output, input_example) VALUES (?, ?, ?, ?, ?, ?, ?)');
+            
+            // \n を実際の改行に変換
+            $description_processed = str_replace('\\n', "\n", $description);
+            $expected_output_processed = str_replace('\\n', "\n", $expected_output);
+            $input_example_processed = str_replace('\\n', "\n", $input_example);
+            $question_text_processed = str_replace('\\n', "\n", $question_text);
+            
+            $statement->execute([$lesson_id, $title, $description_processed, $problem_type, $question_text_processed, $expected_output_processed, $input_example_processed]);
+            $imported++;
+        }
+        
+        $pdo->commit();
+        fclose($handle);
+        json_response([
+            'success' => true,
+            'imported' => $imported,
+            'errors' => $errors
+        ]);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        fclose($handle);
+        json_response(['error' => 'インポート中にエラーが発生しました: ' . $e->getMessage()], 500);
+    }
 }
 
 json_response(['error' => 'Not found'], 404);

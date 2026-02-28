@@ -31,7 +31,17 @@ const AdminUserList: React.FC = () => {
     try {
       const res = await authFetch(apiEndpoints.users);
       const data = await res.json();
-      const filtered = (data || []).filter((u: UserItem) => u.id !== user?.id);
+      let filtered = (data || []).filter((u: UserItem) => u.id !== user?.id);
+      
+      // 先生の場合は生徒のみを表示
+      const isTeacher = user?.role === "teacher" && !user?.is_admin;
+      if (isTeacher) {
+        filtered = filtered.filter((u: UserItem) => {
+          const role = u.role || (u.is_admin ? "admin" : "student");
+          return role === "student";
+        });
+      }
+      
       setUsers(filtered);
       setError("");
     } catch (e: any) {
@@ -110,7 +120,12 @@ const AdminUserList: React.FC = () => {
                   {u.furigana || <span style={{ color: "var(--text-tertiary, #6b7280)" }}>未設定</span>}
                 </td>
                 <td>{u.username}</td>
-                <td>{u.is_admin ? "管理者" : "一般"}</td>
+                <td>
+                  {(() => {
+                    const role = u.role || (u.is_admin ? "admin" : "student");
+                    return role === "admin" ? "管理者" : role === "teacher" ? "先生" : "生徒";
+                  })()}
+                </td>
                 <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
                   {u.class_names || <span style={{ color: "var(--text-tertiary, #6b7280)" }}>未所属</span>}
                 </td>

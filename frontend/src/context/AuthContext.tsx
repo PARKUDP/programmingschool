@@ -43,16 +43,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("authToken");
   };
 
-  const authFetch = (input: RequestInfo, init: RequestInit = {}) => {
+  const authFetch = async (input: RequestInfo, init: RequestInit = {}) => {
     const headers = { ...(init.headers || {}) } as Record<string, string>;
-    // トークンをログ出力（デバッグ用）
-    console.log("[authFetch] token:", token ? "present" : "missing");
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+      // 開発環境でのログは必要な場合のみコメント解除
+      // console.log("[authFetch] リクエスト:", typeof input === 'string' ? input : input.url);
     } else {
       console.warn("[authFetch] トークンがありません。ログインしてください。");
     }
-    return fetch(input, { ...init, headers });
+    
+    const response = await fetch(input, { ...init, headers });
+    
+    // 401エラーの場合は自動的にログアウト
+    if (response.status === 401) {
+      console.error("[authFetch] 401 Unauthorized - セッションが無効です。ログアウトします");
+      logout();
+      // ログインページにリダイレクト
+      window.location.href = '/login';
+    }
+    
+    return response;
   };
 
   const changePassword = async (oldPass: string, newPass: string) => {

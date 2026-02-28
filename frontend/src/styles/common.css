@@ -168,28 +168,27 @@ body {
   max-width: 380px;
   padding: 14px 18px;
   border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
   color: #fff;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(8px);
-}
+  line-height: 1.5;
 }
 
 .snackbar-info { 
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-  border: 2px solid #1e3a8a;
+  background: #2563eb;
+  border: 2px solid #1e40af;
 }
 
 .snackbar-success { 
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  border: 1px solid #15803d;
+  background: #22c55e;
+  border: 2px solid #16a34a;
 }
 
 .snackbar-error { 
-  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
-  border: 2px solid #7f1d1d;
+  background: #dc2626;
+  border: 2px solid #991b1b;
 }
 
 @keyframes slideIn {

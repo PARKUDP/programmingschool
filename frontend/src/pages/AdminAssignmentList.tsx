@@ -54,9 +54,11 @@ const AdminAssignmentList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"list" | "assigned">("list");
+  const [expandedMaterials, setExpandedMaterials] = useState<Set<number>>(new Set());
   const [confirmDialog, setConfirmDialog] = useState<{ isOpen: boolean; assignmentId: number | null; targetId: number | null; title: string; message: string }>(
     { isOpen: false, assignmentId: null, targetId: null, title: "", message: "" }
   );
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: number | null }>({ isOpen: false, id: null });
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
   const isStaff = user?.is_admin || user?.role === "teacher";
@@ -141,15 +143,21 @@ const AdminAssignmentList: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("本当にこの宿題を削除しますか？")) return;
+    setDeleteConfirm({ isOpen: true, id });
+  };
+
+  const confirmDeleteAssignment = async () => {
+    if (!deleteConfirm.id) return;
     try {
-      const res = await authFetch(`${apiEndpoints.assignments}/${id}`, {
+      const res = await authFetch(`${apiEndpoints.assignments}/${deleteConfirm.id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("削除失敗");
-      setAssignments(prev => prev.filter(a => a.id !== id));
+      setAssignments(prev => prev.filter(a => a.id !== deleteConfirm.id));
     } catch (err: any) {
       setError((err.message || "削除に失敗しました"));
+    } finally {
+      setDeleteConfirm({ isOpen: false, id: null });
     }
   };
 
@@ -315,119 +323,243 @@ const AdminAssignmentList: React.FC = () => {
               <EmptyState title="宿題がまだ作成されていません" />
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-              {materials.map(material => {
-                const materialData = groupedData[material.id];
-                if (!materialData || Object.keys(materialData.lessonGroups).length === 0) return null;
-                
-                return (
-                  <div key={material.id} className="card">
-                    <div className="card-title" style={{ fontSize: "1.3rem", marginBottom: "1.5rem", color: "var(--primary)" }}>
-                      {material.title}
-                    </div>
-                    
-                    {Object.values(materialData.lessonGroups).map(({ lesson, assignments }) => {
-                      if (assignments.length === 0) return null;
-                      
-                      return (
-                        <div key={lesson.id} style={{ marginBottom: "2rem", paddingLeft: "1rem", borderLeft: "3px solid var(--border)" }}>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "600", marginBottom: "1rem", color: "var(--text-primary)" }}>
-                            {lesson.title}
-                          </div>
-                          
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))", gap: "1rem" }}>
-                            {assignments.map(assignment => (
-                              <div key={assignment.id} style={{ 
-                                padding: "1.5rem", 
-                                backgroundColor: "#f9fafb", 
-                                borderRadius: "0.5rem",
-                                border: "1px solid var(--border)",
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "1rem"
-                              }}>
-                                {/* タイトルと説明 */}
-                                <div>
-                                  <div style={{ fontWeight: "600", fontSize: "1rem", marginBottom: "0.25rem" }}>{assignment.title}</div>
-                                  <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                                    {new Date(assignment.created_at).toLocaleDateString("ja-JP")}
-                                  </div>
-                                  <div style={{ marginTop: "0.3rem", display: "inline-block", padding: "0.25rem 0.6rem", borderRadius: "0.35rem", fontSize: "0.8rem", backgroundColor: "rgba(59,130,246,0.1)", color: "#1d4ed8" }}>
-                                    {assignment.problem_type === "code" ? "コード" : assignment.problem_type === "essay" ? "記述式" : "選択式"}
-                                  </div>
-                                </div>
-
-                                {/* 説明 */}
-                                {assignment.description && (
-                                  <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                                    {assignment.description}
-                                  </div>
-                                )}
-                            
-                            {/* 問題文 */}
-                            {assignment.question_text && (
-                              <div>
-                                <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "0.5rem", fontWeight: "600" }}>問題文:</div>
-                                <div style={{
-                                  padding: "0.75rem",
-                                  backgroundColor: "rgba(0, 0, 0, 0.2)",
-                                  borderRadius: "0.25rem",
-                                  fontSize: "0.8rem",
-                                  maxHeight: "150px",
-                                  overflowY: "auto",
-                                  whiteSpace: "pre-wrap",
-                                  wordBreak: "break-word",
-                                  color: "var(--text-secondary)"
+            <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: "2rem", alignItems: "start" }}>
+              {/* 左サイドバー */}
+              <div style={{ 
+                position: "sticky", 
+                top: "100px", 
+                height: "fit-content", 
+                backgroundColor: "#ffffff",
+                borderRadius: "12px",
+                padding: "1.5rem",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                border: "1px solid #f0f0f0"
+              }}>
+                <div style={{ 
+                  fontSize: "0.75rem", 
+                  fontWeight: "600", 
+                  marginBottom: "1.25rem", 
+                  color: "#9ca3af",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em"
+                }}>
+                  教材一覧
+                </div>
+                <nav style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {materials.map(material => {
+                    const hasAssignments = groupedData[material.id] && Object.keys(groupedData[material.id].lessonGroups).length > 0;
+                    if (!hasAssignments) return null;
+                    const isExpanded = expandedMaterials.has(material.id);
+                    return (
+                      <div key={material.id}>
+                        <button
+                          onClick={() => {
+                            const newExpanded = new Set(expandedMaterials);
+                            if (newExpanded.has(material.id)) {
+                              newExpanded.delete(material.id);
+                            } else {
+                              newExpanded.add(material.id);
+                            }
+                            setExpandedMaterials(newExpanded);
+                            document.getElementById(`material-${material.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            padding: "0.75rem 1rem",
+                            backgroundColor: "transparent",
+                            color: "#111827",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: "500",
+                            fontSize: "0.9375rem",
+                            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                            borderRadius: "8px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            background: "none",
+                            boxShadow: "none"
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "#f9fafb";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "transparent";
+                          }}
+                        >
+                          <span style={{ flex: 1 }}>{material.title}</span>
+                          <span style={{ 
+                            fontSize: "0.6rem",
+                            color: "#d1d5db",
+                            transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                            transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)"
+                          }}>
+                            ▶
+                          </span>
+                        </button>
+                        {isExpanded && (
+                          <div style={{ 
+                            marginTop: "0.5rem",
+                            marginBottom: "0.5rem",
+                            display: "flex", 
+                            flexDirection: "column", 
+                            gap: "0.25rem"
+                          }}>
+                            {Object.values(groupedData[material.id]?.lessonGroups || {}).map(({ lesson }) => (
+                              <button
+                                key={lesson.id}
+                                onClick={() => {
+                                  document.getElementById(`lesson-${lesson.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                }}
+                                style={{
+                                  textAlign: "left",
+                                  padding: "0.625rem 1rem",
+                                  paddingLeft: "2.5rem",
+                                  backgroundColor: "transparent",
+                                  color: "#6b7280",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  fontSize: "0.875rem",
+                                  fontWeight: "400",
+                                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                                  borderRadius: "6px",
+                                  background: "none",
+                                  boxShadow: "none",
+                                  position: "relative"
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = "#111827";
+                                  e.currentTarget.style.backgroundColor = "#f3f4f6";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color = "#6b7280";
+                                  e.currentTarget.style.backgroundColor = "transparent";
+                                }}
+                              >
+                                <span style={{
+                                  position: "absolute",
+                                  left: "1.25rem",
+                                  color: "#d1d5db",
+                                  fontSize: "0.7rem"
                                 }}>
-                                  {assignment.question_text}
+                                  ·
+                                </span>
+                                {lesson.title}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {/* 右側コンテンツ */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+                {materials.map(material => {
+                  const materialData = groupedData[material.id];
+                  if (!materialData || Object.keys(materialData.lessonGroups).length === 0) return null;
+                  return (
+                    <div key={material.id} id={`material-${material.id}`} className="card">
+                      <div className="card-title" style={{ fontSize: "1.3rem", marginBottom: "1.5rem", color: "var(--primary)" }}>
+                        {material.title}
+                      </div>
+                      {Object.values(materialData.lessonGroups).map(({ lesson, assignments }) => {
+                        if (assignments.length === 0) return null;
+                        return (
+                          <div key={lesson.id} id={`lesson-${lesson.id}`} style={{ marginBottom: "2rem", paddingLeft: "1rem", borderLeft: "3px solid var(--border)" }}>
+                            <div style={{ fontSize: "1.1rem", fontWeight: "600", marginBottom: "1rem", color: "var(--text-primary)" }}>
+                              {lesson.title}
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))", gap: "1rem" }}>
+                              {assignments.map(assignment => (
+                                <div key={assignment.id} style={{ 
+                                  padding: "1.5rem", 
+                                  backgroundColor: "#f9fafb", 
+                                  borderRadius: "0.5rem",
+                                  border: "1px solid var(--border)",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "1rem"
+                                }}>
+                                  <div>
+                                    <div style={{ fontWeight: "600", fontSize: "1rem", marginBottom: "0.25rem" }}>{assignment.title}</div>
+                                    <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                                      {new Date(assignment.created_at).toLocaleDateString("ja-JP")}
+                                    </div>
+                                    <div style={{ marginTop: "0.3rem", display: "inline-block", padding: "0.25rem 0.6rem", borderRadius: "0.35rem", fontSize: "0.8rem", backgroundColor: "rgba(59,130,246,0.1)", color: "#1d4ed8" }}>
+                                      {assignment.problem_type === "code" ? "コード" : assignment.problem_type === "essay" ? "記述式" : "選択式"}
+                                    </div>
+                                  </div>
+                                  {assignment.description && (
+                                    <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                                      {assignment.description}
+                                    </div>
+                                  )}
+                                  {assignment.question_text && (
+                                    <div>
+                                      <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "0.5rem", fontWeight: "600" }}>問題文:</div>
+                                      <div style={{
+                                        padding: "0.75rem",
+                                        backgroundColor: "rgba(0, 0, 0, 0.2)",
+                                        borderRadius: "0.25rem",
+                                        fontSize: "0.8rem",
+                                        maxHeight: "150px",
+                                        overflowY: "auto",
+                                        whiteSpace: "pre-wrap",
+                                        wordBreak: "break-word",
+                                        color: "var(--text-secondary)"
+                                      }}>
+                                        {assignment.question_text}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "auto" }}>
+                                    <button
+                                      className="btn btn-secondary"
+                                      onClick={() => navigate(`/admin/assignments/${assignment.id}/edit`)}
+                                      style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
+                                    >
+                                      編集
+                                    </button>
+                                    <button
+                                      className="btn btn-primary"
+                                      onClick={() => navigate(`/admin/assignments/${assignment.id}/manage`)}
+                                      style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
+                                    >
+                                      割り当て
+                                    </button>
+                                    {assignment.problem_type === "code" && (
+                                      <button
+                                        className="btn btn-secondary"
+                                        onClick={() => handleTestCaseClick(assignment.id)}
+                                        style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
+                                      >
+                                        テストケース
+                                      </button>
+                                    )}
+                                    <button
+                                      className="btn btn-danger"
+                                      onClick={() => handleDelete(assignment.id)}
+                                      style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
+                                    >
+                                      削除
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                            
-                            {/* ボタン */}
-                            <div style={{ display: "flex", gap: "0.5rem", marginTop: "auto" }}>
-                              <button
-                                className="btn btn-secondary"
-                                onClick={() => navigate(`/admin/assignments/${assignment.id}/edit`)}
-                                style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
-                              >
-                                編集
-                              </button>
-                              <button
-                                className="btn btn-primary"
-                                onClick={() => navigate(`/admin/assignments/${assignment.id}/manage`)}
-                                style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
-                              >
-                                割り当て
-                              </button>
-                              {assignment.problem_type === "code" && (
-                                <button
-                                  className="btn btn-secondary"
-                                  onClick={() => handleTestCaseClick(assignment.id)}
-                                  style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
-                                >
-                                  テストケース
-                                </button>
-                              )}
-                              <button
-                                className="btn btn-danger"
-                                onClick={() => handleDelete(assignment.id)}
-                                style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
-                              >
-                                削除
-                              </button>
+                              ))}
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          )}
     </>
   ) : (
     // 割り当て管理タブ
@@ -520,6 +652,17 @@ const AdminAssignmentList: React.FC = () => {
       )}
     </>
   )}
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="宿題の削除"
+        message="本当にこの宿題を削除しますか？"
+        confirmText="OK"
+        cancelText="キャンセル"
+        isDangerous={true}
+        onConfirm={confirmDeleteAssignment}
+        onCancel={() => setDeleteConfirm({ isOpen: false, id: null })}
+      />
     </div>
   );
 };

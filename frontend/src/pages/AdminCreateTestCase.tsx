@@ -5,6 +5,7 @@ import { apiEndpoints } from "../config/api";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import { useSnackbar } from "../components/SnackbarContext";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 interface Testcase {
   id: number;
@@ -22,6 +23,7 @@ const AdminCreateTestCase: React.FC = () => {
   const [comment, setComment] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: number | null }>({ isOpen: false, id: null });
   const [loading, setLoading] = useState(false);
   const { authFetch } = useAuth();
   const { showSnackbar } = useSnackbar();
@@ -30,7 +32,8 @@ const AdminCreateTestCase: React.FC = () => {
 
   useEffect(() => {
     fetchTestcases();
-  }, [assignmentId, authFetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignmentId]);
 
   const fetchTestcases = async () => {
     if (!assignmentId) return;
@@ -116,17 +119,25 @@ const AdminCreateTestCase: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm("本当に削除しますか？")) return;
+  const handleDeleteTestCase = async (tcid: number) => {
+    setDeleteConfirm({ isOpen: true, id: tcid });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.id) return;
     try {
-      const res = await authFetch(`${apiEndpoints.testcases}/${id}`, { method: "DELETE" });
+      const res = await authFetch(`${apiEndpoints.testcases}/${deleteConfirm.id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("削除失敗");
       setMessage("テストケースを削除しました");
       showSnackbar("テストケースを削除しました", "success");
-      setTestcases((prev) => prev.filter((t) => t.id !== id));
+      setTestcases((prev) => prev.filter((t) => t.id !== deleteConfirm.id));
     } catch (err: any) {
-      setError((err.message || "削除に失敗しました"));
+      setError(err.message || "削除に失敗しました");
       showSnackbar("削除に失敗しました", "error");
+    } finally {
+      setDeleteConfirm({ isOpen: false, id: null });
     }
   };
 
@@ -254,7 +265,7 @@ const AdminCreateTestCase: React.FC = () => {
                   </button>
                   <button
                     className="btn btn-danger"
-                    onClick={() => handleDelete(tc.id)}
+                    onClick={() => handleDeleteTestCase(tc.id)}
                   >
                     削除
                   </button>
@@ -264,6 +275,17 @@ const AdminCreateTestCase: React.FC = () => {
           ))
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="テストケースの削除"
+        message="本当にこのテストケースを削除しますか？"
+        confirmText="OK"
+        cancelText="キャンセル"
+        isDangerous={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm({ isOpen: false, id: null })}
+      />
     </div>
   );
 };

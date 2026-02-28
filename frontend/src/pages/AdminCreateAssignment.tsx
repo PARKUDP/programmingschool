@@ -58,6 +58,7 @@ const AdminCreateAssignment: React.FC = () => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [selectedClasses, setSelectedClasses] = useState<number[]>([]);
+  const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form');
   const titleValid = title.trim().length >= 1;
   const questionValid = questionText.trim().length >= 1;
   const lessonValid = !!lessonId;
@@ -343,9 +344,81 @@ const AdminCreateAssignment: React.FC = () => {
       {message && <div className="message message-success">{message}</div>}
       {error && <div className="message message-error">{error}</div>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", alignItems: "start" }}>
+      {/* タブ表示（小画面用） */}
+      <div style={{
+        display: 'none',
+        '@media (max-width: 1023px)': { display: 'flex' },
+        gap: '0.5rem',
+        marginBottom: '1.5rem',
+        borderBottom: '2px solid var(--border)',
+        paddingBottom: '0'
+      }}>
+        <button
+          onClick={() => setActiveTab('form')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            backgroundColor: activeTab === 'form' ? 'var(--primary)' : 'transparent',
+            color: activeTab === 'form' ? 'white' : 'var(--text-secondary)',
+            border: 'none',
+            borderBottom: activeTab === 'form' ? '3px solid var(--primary)' : 'none',
+            cursor: 'pointer',
+            fontWeight: activeTab === 'form' ? '600' : '500',
+            fontSize: '0.95rem',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          情報入力
+        </button>
+        <button
+          onClick={() => setActiveTab('preview')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            backgroundColor: activeTab === 'preview' ? 'var(--primary)' : 'transparent',
+            color: activeTab === 'preview' ? 'white' : 'var(--text-secondary)',
+            border: 'none',
+            borderBottom: activeTab === 'preview' ? '3px solid var(--primary)' : 'none',
+            cursor: 'pointer',
+            fontWeight: activeTab === 'preview' ? '600' : '500',
+            fontSize: '0.95rem',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          プレビュー
+        </button>
+      </div>
+
+      {/* メインレイアウト - レスポンシブ */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 400px)',
+        gap: '2rem',
+        alignItems: 'start'
+      } as React.CSSProperties & { '@media (max-width: 1023px)'?: React.CSSProperties }}>
+        {/* スタイル定義（CSSルール） */}
+        <style>{`
+          @media (max-width: 1023px) {
+            .assignment-form-container {
+              display: ${activeTab === 'form' ? 'block' : 'none'} !important;
+              grid-column: 1 / -1 !important;
+            }
+            .assignment-preview-container {
+              display: ${activeTab === 'preview' ? 'block' : 'none'} !important;
+              grid-column: 1 / -1 !important;
+              position: static !important;
+              top: auto !important;
+            }
+          }
+          @media (min-width: 1024px) {
+            .assignment-preview-container {
+              position: sticky;
+              top: 100px;
+              height: fit-content;
+            }
+          }
+        `}</style>
+
         {/* 入力フォーム */}
-        <div className="card">
+        <div className="assignment-form-container card">
           <div className="card-title">宿題情報を入力</div>
           
           {/* セクション1: 基本情報 */}
@@ -759,7 +832,7 @@ const AdminCreateAssignment: React.FC = () => {
         </div>
 
         {/* プレビュー */}
-        <div className="card">
+        <div className="assignment-preview-container card">
           <div className="card-title">プレビュー</div>
           <div style={{ fontSize: "0.9rem", lineHeight: "1.6" }}>
             {title ? (

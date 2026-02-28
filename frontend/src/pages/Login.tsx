@@ -39,9 +39,19 @@ const Login: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.error || "ログインに失敗しました"
-        );
+        // エラーメッセージを日本語化
+        let errorMessage = "ログインに失敗しました";
+        if (errorData.error) {
+          const errorText = errorData.error.toLowerCase();
+          if (errorText.includes("invalid credentials") || errorText.includes("認証情報")) {
+            errorMessage = "ユーザー名またはパスワードが正しくありません";
+          } else if (errorText.includes("user not found") || errorText.includes("ユーザーが見つかりません")) {
+            errorMessage = "ユーザーが存在しません";
+          } else {
+            errorMessage = errorData.error;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { apiEndpoints } from "../config/api";
-
+import { apiEndpoints } from "../config/api";import ConfirmDialog from "../components/ConfirmDialog";
 interface Problem {
   id: number;
   lesson_id: number;
@@ -95,6 +94,17 @@ const AdminProblemList: React.FC = () => {
           );
         })}
       </ul>
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="問題の削除"
+        message="本当にこの問題を削除しますか？"
+        confirmText="OK"
+        cancelText="キャンセル"
+        isDangerous={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm({ isOpen: false, id: null })}
+      />
     </div>
   );
 };

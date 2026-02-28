@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { apiEndpoints } from "../config/api";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 interface Lesson {
   id: number;
@@ -18,6 +19,7 @@ const AdminLessonList: React.FC = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [editModal, setEditModal] = useState<{ isOpen: boolean; id: number | null; title: string; description: string }>({ isOpen: false, id: null, title: "", description: "" });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: number | null }>({ isOpen: false, id: null });
   const navigate = useNavigate();
   const { authFetch } = useAuth();
 
@@ -103,14 +105,20 @@ const AdminLessonList: React.FC = () => {
   };
 
   const handleDelete = async (lessonId: number) => {
-    if (!window.confirm("本当に削除しますか？")) return;
+    setDeleteConfirm({ isOpen: true, id: lessonId });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.id) return;
     try {
-      const res = await authFetch(`${apiEndpoints.lessons}/${lessonId}`, { method: "DELETE" });
+      const res = await authFetch(`${apiEndpoints.lessons}/${deleteConfirm.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("削除失敗");
       setMessage("レッスンを削除しました");
       await fetchLessons();
     } catch (err: any) {
       setError((err.message || "削除に失敗しました"));
+    } finally {
+      setDeleteConfirm({ isOpen: false, id: null });
     }
   };
 
@@ -245,6 +253,17 @@ const AdminLessonList: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="レッスンの削除"
+        message="本当にこのレッスンを削除しますか？"
+        confirmText="OK"
+        cancelText="キャンセル"
+        isDangerous={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm({ isOpen: false, id: null })}
+      />
     </div>
   );
 };
