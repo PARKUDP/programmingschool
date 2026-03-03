@@ -3,6 +3,11 @@
 // - 開発: http://localhost:5050
 // - SSR/コンテナ内: http://backend:80
 const getApiBaseUrl = (): string => {
+  const envApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+  if (typeof envApiBaseUrl === "string") {
+    return envApiBaseUrl;
+  }
+
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
     // ブラウザアクセス時は localhost 以外なら相対パスで返す（ドメインを固定しない）
