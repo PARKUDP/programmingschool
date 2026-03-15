@@ -63,7 +63,6 @@ backend/docker-compose.override.yml
 JWT_SECRET=
 DATABASE_PASSWORD=
 
-frontend/img/
 frontend/.env.local
 frontend/.env.*.local
 
