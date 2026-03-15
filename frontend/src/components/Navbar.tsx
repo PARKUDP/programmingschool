@@ -21,7 +21,7 @@ const Navbar: React.FC = () => {
     <nav className="navbar">
       <div className="navbar-container">
         <Link to={(user.is_admin || user.role === "teacher") ? "/admin/dashboard" : "/dashboard"} className="navbar-brand" title="ホームへ">
-          <img src="/img/logo_image_01.svg" alt="Kidz8" style={{ height: "40px" }} />
+          <img src="/logo_image_01.svg" alt="Kidz8" style={{ height: "40px" }} />
         </Link>
         
         <button className="navbar-toggle" onClick={() => setIsOpen(!isOpen)}>

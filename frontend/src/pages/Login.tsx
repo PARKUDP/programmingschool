@@ -81,7 +81,7 @@ const Login: React.FC = () => {
       <div className="login-content">
         <div className="login-card">
           <div className="login-header">
-            <img src="/img/logo_image_01.svg" alt="Kidz8" className="login-logo" />
+            <img src="/logo_image_01.svg" alt="Kidz8" className="login-logo" />
             <h1 className="login-title">Kidz8</h1>
             <p className="login-subtitle">プログラミング学習プラットフォーム</p>
           </div>
