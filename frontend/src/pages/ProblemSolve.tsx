@@ -272,8 +272,12 @@ const ProblemSolve: React.FC = () => {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", alignItems: "start" }}>
         <div className="card">
           <div className="card-title">問題文</div>
-          <div style={{ fontSize: "0.95rem", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>
-            <ReactMarkdown>{assignment.question_text}</ReactMarkdown>
+          <div style={{ fontSize: "0.95rem", lineHeight: "1.6" }}>
+            {assignment.problem_type === "choice" ? (
+              <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{assignment.question_text}</div>
+            ) : (
+              <ReactMarkdown>{assignment.question_text}</ReactMarkdown>
+            )}
           </div>
 
           {assignment.problem_type === "code" && (

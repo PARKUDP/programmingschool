@@ -849,21 +849,70 @@ const AdminCreateAssignment: React.FC = () => {
                 {questionText && (
                   <div style={{ marginBottom: "1rem" }}>
                     <label style={{ fontWeight: "600", color: "var(--text-primary)" }}>問題文:</label>
-                    <pre style={{
+                    <div style={{
                       backgroundColor: "#f9fafb",
                       padding: "0.75rem",
                       borderRadius: "0.5rem",
                       fontSize: "0.85rem",
+                      lineHeight: "1.6",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      fontFamily: "inherit",
                       maxHeight: "120px",
                       overflowY: "auto",
                       margin: "0.5rem 0 0 0"
                     }}>
                       {questionText}
-                    </pre>
+                    </div>
                   </div>
                 )}
 
-                {inputExample && (
+                {problemType === "choice" && (
+                  <div style={{ marginBottom: "1rem" }}>
+                    <label style={{ fontWeight: "600", color: "var(--text-primary)" }}>選択肢:</label>
+                    <div style={{
+                      backgroundColor: "#f9fafb",
+                      padding: "0.75rem",
+                      borderRadius: "0.5rem",
+                      fontSize: "0.85rem",
+                      lineHeight: "1.6",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      maxHeight: "100px",
+                      overflowY: "auto",
+                      margin: "0.5rem 0 0 0"
+                    }}>
+                      {choiceOptions
+                        .map((opt) => opt.trim())
+                        .filter((opt) => opt.length > 0)
+                        .map((opt, idx) => (
+                          <div key={`${idx}-${opt}`}>{idx + 1}. {opt}</div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {problemType === "choice" && choiceOptions[correctAnswerIndex]?.trim() && (
+                  <div style={{ marginBottom: "1rem" }}>
+                    <label style={{ fontWeight: "600", color: "var(--text-primary)" }}>正解:</label>
+                    <div style={{
+                      backgroundColor: "rgba(34, 197, 94, 0.1)",
+                      padding: "0.75rem",
+                      borderRadius: "0.5rem",
+                      fontSize: "0.85rem",
+                      lineHeight: "1.6",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      maxHeight: "100px",
+                      overflowY: "auto",
+                      margin: "0.5rem 0 0 0"
+                    }}>
+                      {choiceOptions[correctAnswerIndex]?.trim()}
+                    </div>
+                  </div>
+                )}
+
+                {problemType === "code" && inputExample && (
                   <div style={{ marginBottom: "1rem" }}>
                     <label style={{ fontWeight: "600", color: "var(--text-primary)" }}>入力例:</label>
                     <pre style={{
@@ -880,9 +929,26 @@ const AdminCreateAssignment: React.FC = () => {
                   </div>
                 )}
 
-                {expectedOutput && (
+                {problemType === "code" && expectedOutput && (
                   <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ fontWeight: "600", color: "var(--text-primary)" }}>望ましい出力:</label>
+                    <label style={{ fontWeight: "600", color: "var(--text-primary)" }}>期待される出力:</label>
+                    <pre style={{
+                      backgroundColor: "rgba(34, 197, 94, 0.1)",
+                      padding: "0.75rem",
+                      borderRadius: "0.5rem",
+                      fontSize: "0.85rem",
+                      maxHeight: "100px",
+                      overflowY: "auto",
+                      margin: "0.5rem 0 0 0"
+                    }}>
+                      {expectedOutput}
+                    </pre>
+                  </div>
+                )}
+
+                {problemType === "essay" && expectedOutput && (
+                  <div style={{ marginBottom: "1rem" }}>
+                    <label style={{ fontWeight: "600", color: "var(--text-primary)" }}>期待される回答例:</label>
                     <pre style={{
                       backgroundColor: "rgba(34, 197, 94, 0.1)",
                       padding: "0.75rem",
