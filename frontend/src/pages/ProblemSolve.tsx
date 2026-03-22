@@ -272,7 +272,7 @@ const ProblemSolve: React.FC = () => {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", alignItems: "start" }}>
         <div className="card">
           <div className="card-title">問題文</div>
-          <div style={{ fontSize: "0.95rem", lineHeight: "1.6" }}>
+          <div style={{ fontSize: "0.95rem", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>
             <ReactMarkdown>{assignment.question_text}</ReactMarkdown>
           </div>
 
@@ -444,7 +444,7 @@ const ProblemSolve: React.FC = () => {
                       onChange={() => setSelectedChoice(option.id)}
                       style={{ marginRight: "0.75rem", cursor: "pointer" }}
                     />
-                    <span>{option.option_text}</span>
+                    <span style={{ whiteSpace: "pre-wrap" }}>{option.option_text}</span>
                   </label>
                 ))}
               </div>
