@@ -54,7 +54,8 @@ const AdminAssignmentList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"list" | "assigned">("list");
-  const [expandedMaterials, setExpandedMaterials] = useState<Set<number>>(new Set());
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ isOpen: boolean; assignmentId: number | null; targetId: number | null; title: string; message: string }>(
     { isOpen: false, assignmentId: null, targetId: null, title: "", message: "" }
   );
@@ -274,7 +275,7 @@ const AdminAssignmentList: React.FC = () => {
       {/* タブ切り替え */}
       <div style={{ marginBottom: "1.5rem", display: "flex", gap: "0.5rem", borderBottom: "2px solid var(--border)" }}>
         <button
-          onClick={() => setActiveTab("list")}
+          onClick={() => { setActiveTab("list"); setSelectedMaterial(null); setSelectedLesson(null); }}
           style={{
             padding: "0.75rem 1.5rem",
             background: activeTab === "list" ? "var(--primary)" : "transparent",
@@ -290,7 +291,7 @@ const AdminAssignmentList: React.FC = () => {
           宿題一覧
         </button>
         <button
-          onClick={() => setActiveTab("assigned")}
+          onClick={() => { setActiveTab("assigned"); setSelectedMaterial(null); setSelectedLesson(null); }}
           style={{
             padding: "0.75rem 1.5rem",
             background: activeTab === "assigned" ? "var(--primary)" : "transparent",
@@ -309,7 +310,41 @@ const AdminAssignmentList: React.FC = () => {
 
       {activeTab === "list" ? (
         <>
-          <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            {/* パンくずナビ */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+              <button
+                onClick={() => { setSelectedMaterial(null); setSelectedLesson(null); }}
+                style={{
+                  background: "none", border: "none", cursor: selectedMaterial ? "pointer" : "default",
+                  color: selectedMaterial ? "var(--primary)" : "var(--text-secondary)",
+                  fontWeight: selectedMaterial ? "600" : "400", padding: 0, fontSize: "0.9rem"
+                }}
+              >
+                教材一覧
+              </button>
+              {selectedMaterial && (
+                <>
+                  <span>›</span>
+                  <button
+                    onClick={() => setSelectedLesson(null)}
+                    style={{
+                      background: "none", border: "none", cursor: selectedLesson ? "pointer" : "default",
+                      color: selectedLesson ? "var(--primary)" : "var(--text-secondary)",
+                      fontWeight: selectedLesson ? "600" : "400", padding: 0, fontSize: "0.9rem"
+                    }}
+                  >
+                    {selectedMaterial.title}
+                  </button>
+                </>
+              )}
+              {selectedLesson && (
+                <>
+                  <span>›</span>
+                  <span style={{ color: "var(--text-primary)", fontWeight: "600" }}>{selectedLesson.title}</span>
+                </>
+              )}
+            </div>
             <button
               className="btn btn-primary"
               onClick={() => navigate("/admin/assignments/create")}
@@ -318,247 +353,199 @@ const AdminAssignmentList: React.FC = () => {
             </button>
           </div>
 
-          {assignments.length === 0 ? (
-            <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
-              <EmptyState title="宿題がまだ作成されていません" />
-            </div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: "2rem", alignItems: "start" }}>
-              {/* 左サイドバー */}
-              <div style={{ 
-                position: "sticky", 
-                top: "100px", 
-                height: "fit-content", 
-                backgroundColor: "#ffffff",
-                borderRadius: "12px",
-                padding: "1.5rem",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                border: "1px solid #f0f0f0"
-              }}>
-                <div style={{ 
-                  fontSize: "0.75rem", 
-                  fontWeight: "600", 
-                  marginBottom: "1.25rem", 
-                  color: "#9ca3af",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em"
-                }}>
-                  教材一覧
+          {/* STEP 1: 教材選択 */}
+          {!selectedMaterial && (
+            <>
+              {materials.filter(m => groupedData[m.id] && Object.keys(groupedData[m.id].lessonGroups).some(lid => groupedData[m.id].lessonGroups[Number(lid)].assignments.length > 0)).length === 0 ? (
+                <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
+                  <EmptyState title="宿題がまだ作成されていません" />
                 </div>
-                <nav style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "1rem" }}>
                   {materials.map(material => {
-                    const hasAssignments = groupedData[material.id] && Object.keys(groupedData[material.id].lessonGroups).length > 0;
-                    if (!hasAssignments) return null;
-                    const isExpanded = expandedMaterials.has(material.id);
+                    const materialData = groupedData[material.id];
+                    if (!materialData) return null;
+                    const assignmentCount = Object.values(materialData.lessonGroups).reduce((sum, lg) => sum + lg.assignments.length, 0);
+                    if (assignmentCount === 0) return null;
+                    const lessonCount = Object.values(materialData.lessonGroups).filter(lg => lg.assignments.length > 0).length;
                     return (
-                      <div key={material.id}>
-                        <button
-                          onClick={() => {
-                            const newExpanded = new Set(expandedMaterials);
-                            if (newExpanded.has(material.id)) {
-                              newExpanded.delete(material.id);
-                            } else {
-                              newExpanded.add(material.id);
-                            }
-                            setExpandedMaterials(newExpanded);
-                            document.getElementById(`material-${material.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                          }}
-                          style={{
-                            width: "100%",
-                            textAlign: "left",
-                            padding: "0.75rem 1rem",
-                            backgroundColor: "transparent",
-                            color: "#111827",
-                            border: "none",
-                            cursor: "pointer",
-                            fontWeight: "500",
-                            fontSize: "0.9375rem",
-                            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                            borderRadius: "8px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            background: "none",
-                            boxShadow: "none"
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = "#f9fafb";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = "transparent";
-                          }}
-                        >
-                          <span style={{ flex: 1 }}>{material.title}</span>
-                          <span style={{ 
-                            fontSize: "0.6rem",
-                            color: "#d1d5db",
-                            transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                            transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)"
-                          }}>
-                            ▶
-                          </span>
-                        </button>
-                        {isExpanded && (
-                          <div style={{ 
-                            marginTop: "0.5rem",
-                            marginBottom: "0.5rem",
-                            display: "flex", 
-                            flexDirection: "column", 
-                            gap: "0.25rem"
-                          }}>
-                            {Object.values(groupedData[material.id]?.lessonGroups || {}).map(({ lesson }) => (
-                              <button
-                                key={lesson.id}
-                                onClick={() => {
-                                  document.getElementById(`lesson-${lesson.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                                }}
-                                style={{
-                                  textAlign: "left",
-                                  padding: "0.625rem 1rem",
-                                  paddingLeft: "2.5rem",
-                                  backgroundColor: "transparent",
-                                  color: "#6b7280",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  fontSize: "0.875rem",
-                                  fontWeight: "400",
-                                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                                  borderRadius: "6px",
-                                  background: "none",
-                                  boxShadow: "none",
-                                  position: "relative"
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.color = "#111827";
-                                  e.currentTarget.style.backgroundColor = "#f3f4f6";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.color = "#6b7280";
-                                  e.currentTarget.style.backgroundColor = "transparent";
-                                }}
-                              >
-                                <span style={{
-                                  position: "absolute",
-                                  left: "1.25rem",
-                                  color: "#d1d5db",
-                                  fontSize: "0.7rem"
-                                }}>
-                                  ·
-                                </span>
-                                {lesson.title}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <button
+                        key={material.id}
+                        onClick={() => setSelectedMaterial(material)}
+                        style={{
+                          textAlign: "left",
+                          padding: "1.5rem",
+                          backgroundColor: "#ffffff",
+                          border: "1px solid var(--border)",
+                          borderRadius: "12px",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.75rem"
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; }}
+                      >
+                        <div style={{ fontSize: "1rem", fontWeight: "600", color: "var(--text-primary)" }}>{material.title}</div>
+                        <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                          <span>{lessonCount} レッスン</span>
+                          <span>{assignmentCount} 問</span>
+                        </div>
+                        <div style={{ color: "var(--primary)", fontSize: "0.85rem", fontWeight: "500" }}>
+                          開く →
+                        </div>
+                      </button>
                     );
                   })}
-                </nav>
-              </div>
+                </div>
+              )}
+            </>
+          )}
 
-              {/* 右側コンテンツ */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-                {materials.map(material => {
-                  const materialData = groupedData[material.id];
-                  if (!materialData || Object.keys(materialData.lessonGroups).length === 0) return null;
+          {/* STEP 2: レッスン選択 */}
+          {selectedMaterial && !selectedLesson && (
+            <>
+              {(() => {
+                const materialData = groupedData[selectedMaterial.id];
+                const lessonGroups = materialData ? Object.values(materialData.lessonGroups).filter(lg => lg.assignments.length > 0) : [];
+                if (lessonGroups.length === 0) {
                   return (
-                    <div key={material.id} id={`material-${material.id}`} className="card">
-                      <div className="card-title" style={{ fontSize: "1.3rem", marginBottom: "1.5rem", color: "var(--primary)" }}>
-                        {material.title}
-                      </div>
-                      {Object.values(materialData.lessonGroups).map(({ lesson, assignments }) => {
-                        if (assignments.length === 0) return null;
-                        return (
-                          <div key={lesson.id} id={`lesson-${lesson.id}`} style={{ marginBottom: "2rem", paddingLeft: "1rem", borderLeft: "3px solid var(--border)" }}>
-                            <div style={{ fontSize: "1.1rem", fontWeight: "600", marginBottom: "1rem", color: "var(--text-primary)" }}>
-                              {lesson.title}
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))", gap: "1rem" }}>
-                              {assignments.map(assignment => (
-                                <div key={assignment.id} style={{ 
-                                  padding: "1.5rem", 
-                                  backgroundColor: "#f9fafb", 
-                                  borderRadius: "0.5rem",
-                                  border: "1px solid var(--border)",
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  gap: "1rem"
-                                }}>
-                                  <div>
-                                    <div style={{ fontWeight: "600", fontSize: "1rem", marginBottom: "0.25rem" }}>{assignment.title}</div>
-                                    <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                                      {new Date(assignment.created_at).toLocaleDateString("ja-JP")}
-                                    </div>
-                                    <div style={{ marginTop: "0.3rem", display: "inline-block", padding: "0.25rem 0.6rem", borderRadius: "0.35rem", fontSize: "0.8rem", backgroundColor: "rgba(59,130,246,0.1)", color: "#1d4ed8" }}>
-                                      {assignment.problem_type === "code" ? "コード" : assignment.problem_type === "essay" ? "記述式" : "選択式"}
-                                    </div>
-                                  </div>
-                                  {assignment.description && (
-                                    <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                                      {assignment.description}
-                                    </div>
-                                  )}
-                                  {assignment.question_text && (
-                                    <div>
-                                      <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "0.5rem", fontWeight: "600" }}>問題文:</div>
-                                      <div style={{
-                                        padding: "0.75rem",
-                                        backgroundColor: "rgba(0, 0, 0, 0.2)",
-                                        borderRadius: "0.25rem",
-                                        fontSize: "0.8rem",
-                                        maxHeight: "150px",
-                                        overflowY: "auto",
-                                        whiteSpace: "pre-wrap",
-                                        wordBreak: "break-word",
-                                        color: "var(--text-secondary)"
-                                      }}>
-                                        {assignment.question_text}
-                                      </div>
-                                    </div>
-                                  )}
-                                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "auto" }}>
-                                    <button
-                                      className="btn btn-secondary"
-                                      onClick={() => navigate(`/admin/assignments/${assignment.id}/edit`)}
-                                      style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
-                                    >
-                                      編集
-                                    </button>
-                                    <button
-                                      className="btn btn-primary"
-                                      onClick={() => navigate(`/admin/assignments/${assignment.id}/manage`)}
-                                      style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
-                                    >
-                                      割り当て
-                                    </button>
-                                    {assignment.problem_type === "code" && (
-                                      <button
-                                        className="btn btn-secondary"
-                                        onClick={() => handleTestCaseClick(assignment.id)}
-                                        style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
-                                      >
-                                        テストケース
-                                      </button>
-                                    )}
-                                    <button
-                                      className="btn btn-danger"
-                                      onClick={() => handleDelete(assignment.id)}
-                                      style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
-                                    >
-                                      削除
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
+                      <EmptyState title="このカテゴリに宿題はありません" />
                     </div>
                   );
-                })}
-              </div>
-            </div>
+                }
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "1rem" }}>
+                    {lessonGroups.map(({ lesson, assignments: lessonAssignments }) => (
+                      <button
+                        key={lesson.id}
+                        onClick={() => setSelectedLesson(lesson)}
+                        style={{
+                          textAlign: "left",
+                          padding: "1.25rem 1.5rem",
+                          backgroundColor: "#ffffff",
+                          border: "1px solid var(--border)",
+                          borderRadius: "10px",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.5rem"
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; }}
+                      >
+                        <div style={{ fontSize: "0.95rem", fontWeight: "600", color: "var(--text-primary)" }}>{lesson.title}</div>
+                        <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{lessonAssignments.length} 問</div>
+                        <div style={{ color: "var(--primary)", fontSize: "0.8rem", fontWeight: "500" }}>開く →</div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+
+          {/* STEP 3: 宿題一覧 */}
+          {selectedMaterial && selectedLesson && (
+            <>
+              {(() => {
+                const materialData = groupedData[selectedMaterial.id];
+                const lessonGroup = materialData?.lessonGroups[selectedLesson.id];
+                const lessonAssignments = lessonGroup?.assignments || [];
+                if (lessonAssignments.length === 0) {
+                  return (
+                    <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
+                      <EmptyState title="このレッスンに宿題はありません" />
+                    </div>
+                  );
+                }
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))", gap: "1rem" }}>
+                    {lessonAssignments.map(assignment => (
+                      <div key={assignment.id} style={{
+                        padding: "1.5rem",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "0.5rem",
+                        border: "1px solid var(--border)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "1rem"
+                      }}>
+                        <div>
+                          <div style={{ fontWeight: "600", fontSize: "1rem", marginBottom: "0.25rem" }}>{assignment.title}</div>
+                          <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                            {new Date(assignment.created_at).toLocaleDateString("ja-JP")}
+                          </div>
+                          <div style={{ marginTop: "0.3rem", display: "inline-block", padding: "0.25rem 0.6rem", borderRadius: "0.35rem", fontSize: "0.8rem", backgroundColor: "rgba(59,130,246,0.1)", color: "#1d4ed8" }}>
+                            {assignment.problem_type === "code" ? "コード" : assignment.problem_type === "essay" ? "記述式" : "選択式"}
+                          </div>
+                        </div>
+                        {assignment.description && (
+                          <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                            {assignment.description}
+                          </div>
+                        )}
+                        {assignment.question_text && (
+                          <div>
+                            <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "0.5rem", fontWeight: "600" }}>問題文:</div>
+                            <div style={{
+                              padding: "0.75rem",
+                              backgroundColor: "rgba(0, 0, 0, 0.2)",
+                              borderRadius: "0.25rem",
+                              fontSize: "0.8rem",
+                              maxHeight: "150px",
+                              overflowY: "auto",
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                              color: "var(--text-secondary)"
+                            }}>
+                              {assignment.question_text}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: "0.5rem", marginTop: "auto" }}>
+                          <button
+                            className="btn btn-secondary"
+                            onClick={() => navigate(`/admin/assignments/${assignment.id}/edit`)}
+                            style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
+                          >
+                            編集
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => navigate(`/admin/assignments/${assignment.id}/manage`)}
+                            style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
+                          >
+                            割り当て
+                          </button>
+                          {assignment.problem_type === "code" && (
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() => handleTestCaseClick(assignment.id)}
+                              style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
+                            >
+                              テストケース
+                            </button>
+                          )}
+                          <button
+                            className="btn btn-danger"
+                            onClick={() => handleDelete(assignment.id)}
+                            style={{ fontSize: "0.85rem", padding: "0.5rem 0.8rem", flex: 1 }}
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </>
           )}
     </>
   ) : (
