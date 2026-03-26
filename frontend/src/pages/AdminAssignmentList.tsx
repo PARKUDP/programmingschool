@@ -375,7 +375,8 @@ const AdminAssignmentList: React.FC = () => {
                         style={{
                           textAlign: "left",
                           padding: "1.5rem",
-                          backgroundColor: "#ffffff",
+                          background: "#ffffff",
+                          color: "var(--text-primary)",
                           border: "1px solid var(--border)",
                           borderRadius: "12px",
                           cursor: "pointer",
@@ -426,7 +427,8 @@ const AdminAssignmentList: React.FC = () => {
                         style={{
                           textAlign: "left",
                           padding: "1.25rem 1.5rem",
-                          backgroundColor: "#ffffff",
+                          background: "#ffffff",
+                          color: "var(--text-primary)",
                           border: "1px solid var(--border)",
                           borderRadius: "10px",
                           cursor: "pointer",
@@ -601,7 +603,7 @@ const AdminAssignmentList: React.FC = () => {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   openConfirm(
-                                      info.assignment_id || info.id,
+                                      info.id,
                                       t.target_id,
                                     t.target_type === "all" ? "全体" : (t.target_name || "対象")
                                   );
