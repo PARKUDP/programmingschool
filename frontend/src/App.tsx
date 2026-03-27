@@ -1,6 +1,5 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import ProblemList from "./pages/ProblemList";
 import ProblemSolve from "./pages/ProblemSolve";
 import SubmissionHistory from "./pages/SubmissionHistory";
 import Login from "./pages/Login";
@@ -36,7 +35,7 @@ function App() {
           <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
           <Route
             path="/"
-            element={user ? ((user.is_admin || user.role === "teacher") ? <Navigate to="/admin/dashboard" /> : <ProblemList />) : <Navigate to="/login" />}
+            element={user ? ((user.is_admin || user.role === "teacher") ? <Navigate to="/admin/dashboard" /> : <AssignmentList />) : <Navigate to="/login" />}
           />
           <Route
             path="/assignments/:assignmentId"
