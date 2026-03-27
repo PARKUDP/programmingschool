@@ -40,6 +40,8 @@ const AssignmentList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { authFetch, user } = useAuth();
+    const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+    const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -158,77 +160,128 @@ const AssignmentList: React.FC = () => {
 
       {error && <div className="message message-error">{error}</div>}
 
-      {activeAssignments.length === 0 ? (
-        <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
-          <p style={{ color: "var(--text-secondary)", margin: "0" }}>
-            {assignments.length === 0 ? "割り当てられた宿題がまだありません" : "すべての宿題に合格しました！"}
-          </p>
+        {/* パンくずナビゲーション */}
+        <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+          <button
+            onClick={() => { setSelectedMaterial(null); setSelectedLesson(null); }}
+            style={{
+              background: "none", border: "none", cursor: selectedMaterial ? "pointer" : "default",
+              color: selectedMaterial ? "var(--primary)" : "var(--text-secondary)",
+              fontWeight: selectedMaterial ? "600" : "400", padding: 0, fontSize: "0.9rem"
+            }}
+          >
+            教材一覧
+          </button>
+          {selectedMaterial && (
+            <>
+              <span>›</span>
+              <button
+                onClick={() => setSelectedLesson(null)}
+                style={{
+                  background: "none", border: "none", cursor: selectedLesson ? "pointer" : "default",
+                  color: selectedLesson ? "var(--primary)" : "var(--text-secondary)",
+                  fontWeight: selectedLesson ? "600" : "400", padding: 0, fontSize: "0.9rem"
+                }}
+              >
+                {selectedMaterial.title}
+              </button>
+            </>
+          )}
+          {selectedLesson && (
+            <>
+              <span>›</span>
+              <span style={{ color: "var(--text-primary)", fontWeight: "600" }}>{selectedLesson.title}</span>
+            </>
+          )}
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          {groupedData.map(({ material, lessonList }) => (
-            <section key={material.id} className="card" aria-label={`教材: ${material.title}`}>
-              <div style={{ marginBottom: "1rem" }}>
-                <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginBottom: "0.25rem" }}>教材</div>
-                <h2 style={{ margin: 0, color: "var(--primary)", fontSize: "1.35rem" }}>{material.title}</h2>
-              </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {lessonList.map(({ lesson, assignments: lessonAssignments }) => (
-                  <article
-                    key={lesson.id}
+        {!selectedMaterial ? (
+          // 教材一覧画面
+        <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "1rem" }}>
+              {groupedData.map(({ material }) => (
+                <button
+                  key={material.id}
+                  onClick={() => { setSelectedMaterial(material); setSelectedLesson(null); }}
+                  style={{
+                    padding: "2rem", border: "2px solid var(--border)", borderRadius: "8px", background: "#f8fafc",
+                    cursor: "pointer", fontSize: "1.1rem", fontWeight: "600", color: "var(--primary)",
+                    transition: "all 0.2s", textAlign: "center"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.background = "rgba(var(--primary-rgb), 0.05)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "#f8fafc"; }}
+                >
+                  {material.title}
+                </button>
+              ))}
+            </div>
+            {groupedData.length === 0 && (
+              <p style={{ color: "var(--text-secondary)", margin: "0" }}>
+                {assignments.length === 0 ? "割り当てられた宿題がまだありません" : "すべての宿題に合格しました！"}
+              </p>
+            )}
+        </div>
+        ) : !selectedLesson ? (
+          // レッスン一覧画面
+          <div className="card" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "1rem", padding: "1.5rem" }}>
+            {groupedData
+              .find((g) => g.material.id === selectedMaterial.id)
+              ?.lessonList.map(({ lesson }) => (
+                <button
+                  key={lesson.id}
+                  onClick={() => setSelectedLesson(lesson)}
+                  style={{
+                    padding: "2rem", border: "2px solid var(--border)", borderRadius: "8px", background: "#f8fafc",
+                    cursor: "pointer", fontSize: "1rem", fontWeight: "600", color: "var(--text-primary)",
+                    transition: "all 0.2s", textAlign: "center"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.background = "rgba(var(--primary-rgb), 0.05)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "#f8fafc"; }}
+                >
+                  {lesson.title}
+                </button>
+              ))
+            }
+          </div>
+        ) : (
+          // 宿題一覧画面
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "0.75rem" }}>
+            {groupedData
+              .find((g) => g.material.id === selectedMaterial.id)
+              ?.lessonList.find((l) => l.lesson.id === selectedLesson.id)
+              ?.assignments.map((assignment) => (
+                <Link
+                  key={assignment.id}
+                  to={`/assignments/${assignment.id}`}
+                  style={{ textDecoration: "none", color: "inherit" }}
+                >
+                  <div
                     style={{
-                      borderLeft: "3px solid var(--border)",
-                      paddingLeft: "1rem",
+                      border: "1px solid var(--border)",
+                      borderRadius: "10px",
+                      padding: "0.9rem",
+                      background: "#f8fafc",
+                      height: "100%",
+                      cursor: "pointer",
+                      transition: "all 0.2s"
                     }}
-                    aria-label={`レッスン: ${lesson.title}`}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; }}
                   >
-                    <div style={{ marginBottom: "0.75rem" }}>
-                      <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginBottom: "0.25rem" }}>レッスン</div>
-                      <h3 style={{ margin: 0, fontSize: "1.1rem" }}>{lesson.title}</h3>
+                    <div style={{ color: "var(--text-secondary)", fontSize: "0.75rem", marginBottom: "0.25rem" }}>宿題</div>
+                    <div style={{ fontWeight: 700, marginBottom: "0.35rem", color: "var(--text-primary)" }}>{assignment.title}</div>
+                    <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>
+                      {new Date(assignment.created_at).toLocaleDateString("ja-JP")}
                     </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      {lessonAssignments.map((assignment) => (
-                        <Link
-                          key={assignment.id}
-                          to={`/assignments/${assignment.id}`}
-                          style={{ textDecoration: "none", color: "inherit" }}
-                        >
-                          <div
-                            style={{
-                              border: "1px solid var(--border)",
-                              borderRadius: "10px",
-                              padding: "0.9rem",
-                              background: "#f8fafc",
-                              height: "100%",
-                            }}
-                          >
-                            <div style={{ color: "var(--text-secondary)", fontSize: "0.75rem", marginBottom: "0.25rem" }}>宿題</div>
-                            <div style={{ fontWeight: 700, marginBottom: "0.35rem", color: "var(--text-primary)" }}>{assignment.title}</div>
-                            <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>
-                              {new Date(assignment.created_at).toLocaleDateString("ja-JP")}
-                            </div>
-                            {assignment.description && (
-                              <p style={{ margin: "0.6rem 0 0 0", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
-                                {assignment.description}
-                              </p>
-                            )}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ))}
+                    {assignment.description && (
+                      <p style={{ margin: "0.6rem 0 0 0", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                        {assignment.description}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              ))
+            }
         </div>
       )}
     </div>
