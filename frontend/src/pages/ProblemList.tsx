@@ -84,31 +84,43 @@ const ProblemList: React.FC = () => {
   // 合格していない宿題のみフィルタリング
   const activeAssignments = assignments.filter((a) => !passedAssignmentIds.has(a.id));
 
-  // 教材ごとにグループ化
+  // 表示対象（未合格の宿題）のみを教材→レッスンへグループ化
   const groupedData = React.useMemo(() => {
+    const lessonById = new Map(lessons.map((lesson) => [lesson.id, lesson]));
+    const materialById = new Map(materials.map((material) => [material.id, material]));
+
     const grouped: Record<
       number,
-      { material: Material; lessonGroups: Record<number, { lesson: Lesson; assignments: Assignment[] }> }
+      {
+        material: Material;
+        lessons: Record<number, { lesson: Lesson; assignments: Assignment[] }>;
+      }
     > = {};
 
-    materials.forEach((mat) => {
-      grouped[mat.id] = { material: mat, lessonGroups: {} };
-    });
-
-    lessons.forEach((lesson) => {
-      if (grouped[lesson.material_id]) {
-        grouped[lesson.material_id].lessonGroups[lesson.id] = { lesson, assignments: [] };
-      }
-    });
-
     activeAssignments.forEach((assignment) => {
-      const lesson = lessons.find((l) => l.id === assignment.lesson_id);
-      if (lesson && grouped[lesson.material_id]?.lessonGroups[lesson.id]) {
-        grouped[lesson.material_id].lessonGroups[lesson.id].assignments.push(assignment);
+      const lesson = lessonById.get(assignment.lesson_id);
+      if (!lesson) return;
+
+      const material = materialById.get(lesson.material_id);
+      if (!material) return;
+
+      if (!grouped[material.id]) {
+        grouped[material.id] = { material, lessons: {} };
       }
+
+      if (!grouped[material.id].lessons[lesson.id]) {
+        grouped[material.id].lessons[lesson.id] = { lesson, assignments: [] };
+      }
+
+      grouped[material.id].lessons[lesson.id].assignments.push(assignment);
     });
 
-    return grouped;
+    return Object.values(grouped)
+      .map((materialGroup) => ({
+        ...materialGroup,
+        lessonList: Object.values(materialGroup.lessons).filter((lessonGroup) => lessonGroup.assignments.length > 0),
+      }))
+      .filter((materialGroup) => materialGroup.lessonList.length > 0);
   }, [materials, lessons, activeAssignments]);
 
   if (loading) {
@@ -142,101 +154,82 @@ const ProblemList: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-          {materials.map((material) => {
-            const materialData = groupedData[material.id];
-            if (!materialData || Object.keys(materialData.lessonGroups).length === 0) return null;
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          {groupedData.map(({ material, lessonList }) => (
+            <section key={material.id} className="card" aria-label={`教材: ${material.title}`}>
+              <div style={{ marginBottom: "1rem" }}>
+                <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginBottom: "0.25rem" }}>教材</div>
+                <h2 style={{ margin: 0, color: "var(--primary)", fontSize: "1.35rem" }}>{material.title}</h2>
+              </div>
 
-            return (
-              <div key={material.id} className="card">
-                <div
-                  className="card-title"
-                  style={{ fontSize: "1.3rem", marginBottom: "1.5rem", color: "var(--primary)" }}
-                >
-                  {material.title}
-                </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {lessonList.map(({ lesson, assignments }) => (
+                  <article
+                    key={lesson.id}
+                    style={{
+                      borderLeft: "3px solid var(--border)",
+                      paddingLeft: "1rem",
+                    }}
+                    aria-label={`レッスン: ${lesson.title}`}
+                  >
+                    <div style={{ marginBottom: "0.75rem" }}>
+                      <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginBottom: "0.25rem" }}>レッスン</div>
+                      <h3 style={{ margin: 0, fontSize: "1.1rem", color: "var(--text-primary)" }}>{lesson.title}</h3>
+                    </div>
 
-                {Object.values(materialData.lessonGroups).map(({ lesson, assignments }) => {
-                  if (assignments.length === 0) return null;
-
-                  return (
                     <div
-                      key={lesson.id}
                       style={{
-                        marginBottom: "2rem",
-                        paddingLeft: "1rem",
-                        borderLeft: "3px solid var(--border)",
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                        gap: "0.75rem",
                       }}
                     >
-                      <div
-                        style={{
-                          fontSize: "1.1rem",
-                          fontWeight: "600",
-                          marginBottom: "1rem",
-                          color: "var(--text-primary)",
-                        }}
-                      >
-                        {lesson.title}
-                      </div>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
-                          gap: "1rem",
-                        }}
-                      >
-                        {assignments.map((assignment) => (
-                          <Link
-                            key={assignment.id}
-                            to={`/assignments/${assignment.id}`}
-                            style={{ textDecoration: "none", color: "inherit" }}
+                      {assignments.map((assignment) => (
+                        <Link
+                          key={assignment.id}
+                          to={`/assignments/${assignment.id}`}
+                          style={{ textDecoration: "none", color: "inherit" }}
+                        >
+                          <div
+                            style={{
+                              border: "1px solid var(--border)",
+                              borderRadius: "10px",
+                              padding: "0.9rem",
+                              background: "#f8fafc",
+                              height: "100%",
+                              transition: "all 0.2s ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = "#f3f4f6";
+                              e.currentTarget.style.borderColor = "var(--primary)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = "#f8fafc";
+                              e.currentTarget.style.borderColor = "var(--border)";
+                            }}
                           >
-                            <div
-                              style={{
-                                padding: "1rem",
-                                backgroundColor: "#f9fafb",
-                                borderRadius: "0.5rem",
-                                border: "1px solid var(--border)",
-                                cursor: "pointer",
-                                transition: "all 0.2s ease",
-                                height: "100%",
-                                display: "flex",
-                                flexDirection: "column",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = "#f3f4f6";
-                                e.currentTarget.style.borderColor = "var(--primary)";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = "#f9fafb";
-                                e.currentTarget.style.borderColor = "var(--border)";
-                              }}
-                            >
-                              <div style={{ marginBottom: "0.75rem" }}>
-                                <div style={{ fontSize: "1rem", fontWeight: "600", marginBottom: "0.25rem" }}>
-                                  {assignment.title}
-                                </div>
-                                <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                                  {new Date(assignment.created_at).toLocaleDateString("ja-JP")}
-                                </div>
-                              </div>
-
-                              {assignment.description && (
-                                <div style={{ marginBottom: "0.75rem", fontSize: "0.85rem", color: "var(--text-secondary)", flex: 1 }}>
-                                  {assignment.description}
-                                </div>
-                              )}
+                            <div style={{ color: "var(--text-secondary)", fontSize: "0.75rem", marginBottom: "0.25rem" }}>宿題</div>
+                            <div style={{ fontWeight: 700, marginBottom: "0.35rem", color: "var(--text-primary)" }}>
+                              {assignment.title}
                             </div>
-                          </Link>
-                        ))}
-                      </div>
+                            <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>
+                              {new Date(assignment.created_at).toLocaleDateString("ja-JP")}
+                            </div>
+
+                            {assignment.description && (
+                              <p style={{ margin: "0.6rem 0 0 0", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                                {assignment.description}
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      ))}
                     </div>
-                  );
-                })}
+                  </article>
+                ))}
               </div>
-            );
-          })}
+            </section>
+          ))}
         </div>
       )}
     </div>
